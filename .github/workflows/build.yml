@@ -42,6 +42,11 @@ jobs:
         curl -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
+    - name: Add Custom Sound
+      run: |
+        mkdir -p android/app/src/main/res/raw
+        cp bell.mp3 android/app/src/main/res/raw/bell.mp3
+
     - name: Copy google-services.json
       run: cp google-services.json android/app/
 
@@ -61,4 +66,3 @@ jobs:
       with:
         name: Alshehab-Pro-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
-        
