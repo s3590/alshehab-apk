@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "356161376498",
+    "project_id": "alshehab-pro",
+    "storage_bucket": "alshehab-pro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356161376498:android:9bca0a7515ef0e2876c06b",
+        "android_client_info": {
+          "package_name": "com.alshehab.pro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhHtFBLa4Buvg2Nb1TvnrkLvTGLjZ5XXY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
