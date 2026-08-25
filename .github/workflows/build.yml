@@ -34,12 +34,19 @@ jobs:
         npm install @capacitor-firebase/analytics@5 --legacy-peer-deps
         npm install @capacitor-firebase/crashlytics@5 --legacy-peer-deps
 
-    - name: Configure Live Server & Splash Screen
+    - name: Build local www folder (Ultimate Hybrid Mode)
       run: |
-        mkdir -p www
-        echo "<html><body>Loading...</body></html>" > www/index.html
-        # توجيه التطبيق للسيرفر الحي + إعداد شاشة الإقلاع الأصلية
-        node -e "const fs=require('fs'); let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true }; c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));"
+        mkdir -p www/static
+        # 1. جلب الواجهة المجهزة بالأرقام الحقيقية من السيرفر
+        curl -sL https://my-bot-ehio.onrender.com/ -o www/index.html
+        
+        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة
+        curl -sL https://my-bot-ehio.onrender.com/firebase-messaging-sw.js -o www/firebase-messaging-sw.js
+        curl -sL https://my-bot-ehio.onrender.com/static/logo.png -o www/static/logo.png
+        curl -sL https://my-bot-ehio.onrender.com/static/manifest.json -o www/static/manifest.json
+        
+        # 3. إزالة رابط السيرفر لكي يفتح محلياً + إعداد شاشة الإقلاع
+        node -e "const fs=require('fs' ); let c=JSON.parse(fs.readFileSync('capacitor.config.json')); if(c.server) delete c.server.url; c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));"
 
     - name: Add Android Platform
       run: |
