@@ -26,9 +26,9 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        npm install
-        npm install @capacitor/assets -D
-        npm install @capgo/capacitor-native-biometric
+        npm install --legacy-peer-deps
+        npm install @capacitor/assets -D --legacy-peer-deps
+        npm install @capgo/capacitor-native-biometric@5 --legacy-peer-deps
 
     - name: Build local www folder (Ultimate Hybrid Mode)
       run: |
