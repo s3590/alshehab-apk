@@ -28,7 +28,7 @@ jobs:
       run: |
         npm install
         npm install @capacitor/assets -D
-        npm install @epicshaggy/capacitor-native-biometric
+        npm install @capgo/capacitor-native-biometric
 
     - name: Build local www folder (Ultimate Hybrid Mode)
       run: |
@@ -36,7 +36,7 @@ jobs:
         # 1. جلب الواجهة المجهزة بالأرقام الحقيقية من السيرفر
         curl -sL https://my-bot-ehio.onrender.com/ -o www/index.html
         
-        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة (لأنها غير موجودة في جيت هاب  )
+        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة
         curl -sL https://my-bot-ehio.onrender.com/firebase-messaging-sw.js -o www/firebase-messaging-sw.js
         curl -sL https://my-bot-ehio.onrender.com/static/logo.png -o www/static/logo.png
         curl -sL https://my-bot-ehio.onrender.com/static/manifest.json -o www/static/manifest.json
