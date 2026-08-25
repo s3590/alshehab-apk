@@ -29,20 +29,17 @@ jobs:
         npm install --legacy-peer-deps
         npm install @capacitor/assets -D --legacy-peer-deps
         npm install @capgo/capacitor-native-biometric@5 --legacy-peer-deps
+        npm install @capacitor/app@5 --legacy-peer-deps
+        npm install @capacitor/splash-screen@5 --legacy-peer-deps
+        npm install @capacitor-firebase/analytics@5 --legacy-peer-deps
+        npm install @capacitor-firebase/crashlytics@5 --legacy-peer-deps
 
-    - name: Build local www folder (Ultimate Hybrid Mode)
+    - name: Configure Live Server & Splash Screen
       run: |
-        mkdir -p www/static
-        # 1. جلب الواجهة المجهزة بالأرقام الحقيقية من السيرفر
-        curl -sL https://my-bot-ehio.onrender.com/ -o www/index.html
-        
-        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة
-        curl -sL https://my-bot-ehio.onrender.com/firebase-messaging-sw.js -o www/firebase-messaging-sw.js
-        curl -sL https://my-bot-ehio.onrender.com/static/logo.png -o www/static/logo.png
-        curl -sL https://my-bot-ehio.onrender.com/static/manifest.json -o www/static/manifest.json
-        
-        # 3. إزالة رابط السيرفر من إعدادات Capacitor لكي يفتح من داخل الهاتف
-        node -e "const fs=require('fs'  ); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); if(c.server) delete c.server.url; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) {}"
+        mkdir -p www
+        echo "<html><body>Loading...</body></html>" > www/index.html
+        # توجيه التطبيق للسيرفر الحي + إعداد شاشة الإقلاع الأصلية
+        node -e "const fs=require('fs'); let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true }; c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));"
 
     - name: Add Android Platform
       run: |
@@ -64,10 +61,11 @@ jobs:
     - name: Copy google-services.json
       run: cp google-services.json android/app/
 
-    - name: Inject Firebase
+    - name: Inject Firebase & Crashlytics
       run: |
-        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"' android/build.gradle
+        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
+        echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
 
     - name: Build APK
       run: |
