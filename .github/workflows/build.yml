@@ -34,20 +34,12 @@ jobs:
         npm install @capacitor-firebase/analytics@5 --legacy-peer-deps
         npm install @capacitor-firebase/crashlytics@5 --legacy-peer-deps
 
-    - name: Build local www folder (Ultimate Hybrid Mode)
+    - name: Prepare www folder
       run: |
-        mkdir -p www/static
-        # 1. جلب الواجهة المجهزة بالأرقام الحقيقية من السيرفر
-        curl -sL https://my-bot-ehio.onrender.com/ -o www/index.html
-        
-        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة
-        curl -sL https://my-bot-ehio.onrender.com/firebase-messaging-sw.js -o www/firebase-messaging-sw.js
-        curl -sL https://my-bot-ehio.onrender.com/static/logo.png -o www/static/logo.png
-        curl -sL https://my-bot-ehio.onrender.com/static/manifest.json -o www/static/manifest.json
-        curl -sL https://my-bot-ehio.onrender.com/static/localforage.min.js -o www/static/localforage.min.js
-        
-        # 3. إزالة رابط السيرفر لكي يفتح محلياً + إعداد شاشة الإقلاع
-        node -e "const fs=require('fs' ); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); if(c.server) delete c.server.url; c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
+        mkdir -p www
+        echo "<html><body>Loading...</body></html>" > www/index.html
+        # 🌟 التعديل السحري: إبقاء رابط السيرفر لكي يتصل بالنت مباشرة، مع إضافة إعدادات شاشة الإقلاع
+        node -e "const fs=require('fs'); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
 
     - name: Add Android Platform
       run: |
@@ -64,7 +56,7 @@ jobs:
     - name: Add Custom Sound
       run: |
         mkdir -p android/app/src/main/res/raw
-        cp bell.mp3 android/app/src/main/res/raw/bell.mp3
+        cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || true
 
     - name: Copy google-services.json
       run: cp google-services.json android/app/
