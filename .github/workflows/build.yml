@@ -40,14 +40,14 @@ jobs:
         # 1. جلب الواجهة المجهزة بالأرقام الحقيقية من السيرفر
         curl -sL https://my-bot-ehio.onrender.com/ -o www/index.html
         
-        # 2. جلب ملفات الأوفلاين الأساسية من السيرفر مباشرة
+        # 2. جلب ملفات الأوفلاين الأساسية (والمكتبة من مصدرها الرسمي لضمان عدم تلفها )
         curl -sL https://my-bot-ehio.onrender.com/firebase-messaging-sw.js -o www/firebase-messaging-sw.js
         curl -sL https://my-bot-ehio.onrender.com/static/logo.png -o www/static/logo.png
         curl -sL https://my-bot-ehio.onrender.com/static/manifest.json -o www/static/manifest.json
-        curl -sL https://my-bot-ehio.onrender.com/static/localforage.min.js -o www/static/localforage.min.js
+        curl -sL https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js -o www/static/localforage.min.js
         
-        # 3. إزالة رابط السيرفر لكي يفتح محلياً + تفعيل CapacitorHttp لاختراق حظر الأندرويد + إعداد شاشة الإقلاع
-        node -e "const fs=require('fs' ); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); if(c.server) delete c.server.url; c.plugins = c.plugins || {}; c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' }; c.plugins.CapacitorHttp = { enabled: true }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
+        # 3. إزالة رابط السيرفر لكي يفتح محلياً + إيقاف CapacitorHttp المزعج + إعداد شاشة الإقلاع
+        node -e "const fs=require('fs' ); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); if(c.server) delete c.server.url; c.plugins = c.plugins || {}; c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' }; if(c.plugins.CapacitorHttp) delete c.plugins.CapacitorHttp; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
 
     - name: Add Android Platform
       run: |
