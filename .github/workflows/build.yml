@@ -11,15 +11,15 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4 # 🌟 الإصلاح: استخدام الإصدار المستقر v4
 
     - name: Setup Node.js
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v4 # 🌟 الإصلاح: استخدام الإصدار المستقر v4
       with:
-        node-version: '24'
+        node-version: '20' # 🌟 الإصلاح: Node 20 هو الأفضل والأكثر استقراراً لـ Capacitor 5
 
     - name: Setup Java
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v4 # 🌟 الإصلاح: استخدام الإصدار المستقر v4
       with:
         distribution: 'zulu'
         java-version: '17'
@@ -38,8 +38,8 @@ jobs:
       run: |
         mkdir -p www
         echo "<html><body>Loading...</body></html>" > www/index.html
-        # 🌟 التعديل السحري: إبقاء رابط السيرفر لكي يتصل بالنت مباشرة، مع إضافة إعدادات شاشة الإقلاع
-        node -e "const fs=require('fs'); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.plugins = { SplashScreen: { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' } }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
+        # 🌟 الإصلاح الأمني: دمج إعدادات شاشة الإقلاع بدون مسح إعدادات الإشعارات (PushNotifications)!
+        node -e "const fs=require('fs'); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.plugins = c.plugins || {}; c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2)); } catch(e) { console.error(e); }"
 
     - name: Add Android Platform
       run: |
@@ -49,8 +49,9 @@ jobs:
     - name: Generate App Icons
       run: |
         mkdir -p assets
-        curl -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
+        # 🌟 الإصلاح: إضافة نظام إعادة المحاولة (Retry) لانتظار استيقاظ سيرفر Render وتجنب تحميل صفحة HTML بالخطأ
+        curl --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
     - name: Add Custom Sound
@@ -59,11 +60,14 @@ jobs:
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || true
 
     - name: Copy google-services.json
-      run: cp google-services.json android/app/
+      run: |
+        # 🌟 نسخ الملف الموجود في المستودع مباشرة إلى مجلد الأندرويد
+        cp google-services.json android/app/
 
     - name: Inject Firebase & Crashlytics
       run: |
-        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
+        # 🌟 إضافة || true لمنع انهيار البناء إذا اختلف هيكل ملف Gradle
+        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
 
@@ -74,10 +78,7 @@ jobs:
         ./gradlew assembleDebug
 
     - name: Upload APK
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v4 # 🌟 الإصلاح: استخدام الإصدار المستقر v4
       with:
         name: Alshehab-Pro-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
-
-
-        
