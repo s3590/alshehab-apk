@@ -3,13 +3,13 @@ name: Build and Release Android APK
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً بضغطة زر
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # مطلوب لرفع التطبيق إلى صفحة الإصدارات (Releases)
+      contents: write
 
     steps:
     - name: 📥 Checkout code
@@ -18,10 +18,10 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24' # تم التحديث لتجنب التحذيرات
+        node-version: '24'
 
     - name: ☕ Setup Java
-      uses: actions/setup-java@v5 # تم التحديث للإصدار الخامس
+      uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: '17'
@@ -37,7 +37,6 @@ jobs:
         mkdir -p www
         echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
         
-        # حقن إعدادات الشاشة الافتتاحية ورابط السيرفر
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {} };
@@ -56,7 +55,6 @@ jobs:
     - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        # سحب الأيقونة الأصلية من الرابط الخاص بك
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
@@ -68,13 +66,8 @@ jobs:
 
     - name: 🔥 Inject Firebase & Fix SDK
       run: |
-        # نسخ ملف جوجل إذا كان موجوداً
         cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
-        
-        # دعم الهواتف القديمة (أندرويد 5.1+)
         sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
-        
-        # حقن الفايربيس في ملفات Gradle
         sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
@@ -85,20 +78,31 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleRelease
 
-    - name: 🔐 Sign APK
-      uses: r0adkll/sign-android-release@v1
-      id: sign_app
-      with:
-        releaseDirectory: android/app/build/outputs/apk/release
-        signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-        alias: ${{ secrets.KEY_ALIAS }}
-        keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-        keyPassword: ${{ secrets.KEY_PASSWORD }}
-        buildToolsVersion: '34.0.0' # 🌟 تم إضافة هذا السطر لحل مشكلة أدوات البناء
-
-    - name: 🏷️ Rename Signed APK
+    - name: 🔐 Sign APK Manually (The Ultimate Fix)
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        mv ${{steps.sign_app.outputs.signedReleaseFile}} Alshehab-Pro.apk
+        # 1. استخراج ملف المفتاح من النص المشفر
+        echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+        
+        # 2. البحث عن أحدث إصدار من أدوات بناء الأندرويد الموجودة في السيرفر تلقائياً
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
+        ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
+        APKSIGNER=$BUILD_TOOLS_DIR/apksigner
+        
+        # 3. تحديد مسار التطبيق غير الموقع
+        APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+        ALIGNED_APK="app-aligned.apk"
+        SIGNED_APK="Alshehab-Pro.apk"
+        
+        # 4. محاذاة التطبيق (Zipalign)
+        $ZIPALIGN -v -p 4 $APK_PATH $ALIGNED_APK
+        
+        # 5. توقيع التطبيق (Apksigner)
+        $APKSIGNER sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out $SIGNED_APK $ALIGNED_APK
 
     - name: 🚀 Publish to GitHub Releases
       uses: softprops/action-gh-release@v1
