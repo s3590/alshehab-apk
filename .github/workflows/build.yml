@@ -39,6 +39,7 @@ jobs:
         echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
         
         # 🌟 تفعيل المحرك الداخلي (CapacitorHttp) لتخطي حظر التحميل (CORS)
+        # 🌟 إضافة رقم الإصدار التلقائي (github.run_number) إلى الرابط
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {} };
@@ -46,8 +47,8 @@ jobs:
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
-          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
+          c.server = { url: 'https://my-bot-ehio.onrender.com?apk_version=${{ github.run_number }}', cleartext: true };
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2  ));
         "
 
     - name: 🤖 Add Android Platform
@@ -62,7 +63,7 @@ jobs:
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional )
+    - name: 🎵 Add Custom Sound (Optional  )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -95,7 +96,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1 )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1  )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -129,5 +130,5 @@ jobs:
       env:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
-        curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}"
-        
+        # 🌟 إرسال رقم الإصدار التلقائي للسيرفر ليحفظه
+        curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
