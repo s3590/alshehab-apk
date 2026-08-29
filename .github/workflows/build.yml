@@ -18,7 +18,7 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '20'
 
     - name: ☕ Setup Java
       uses: actions/setup-java@v5
@@ -30,21 +30,24 @@ jobs:
       run: |
         npm install --legacy-peer-deps
         npm install @capacitor/assets -D --legacy-peer-deps
-        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 --legacy-peer-deps
+        # 🌟 إضافة مكتبات نظام الملفات وفتح التطبيقات للتحديث الداخلي
+        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capgo/capacitor-file-opener@5 --legacy-peer-deps
 
     - name: ⚙️ Prepare Config & Web Assets
       run: |
         mkdir -p www
         echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
         
+        # 🌟 تفعيل المحرك الداخلي (CapacitorHttp) لتخطي حظر التحميل (CORS)
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {} };
           try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
+          c.plugins.CapacitorHttp = { enabled: true };
           c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2   ));
         "
 
     - name: 🤖 Add Android Platform
@@ -59,18 +62,24 @@ jobs:
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional )
+    - name: 🎵 Add Custom Sound (Optional   )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
 
-    - name: 🔥 Inject Firebase & Fix SDK
+    - name: 🔥 Inject Permissions & Deep Links
       run: |
         cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
         sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
         sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
+        
+        # 🌟 إضافة صلاحيات تثبيت التحديثات من داخل التطبيق
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+        
+        # 🌟 إضافة كود الروابط العميقة (Deep Linking) لكي يفتح التطبيق عند الضغط على رابط موقعك
+        sed -i '/<\/activity>/i \            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
       run: |
@@ -78,30 +87,21 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleRelease
 
-    - name: 🔐 Sign APK Manually (The Ultimate Fix)
+    - name: 🔐 Sign APK Manually
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        # 1. استخراج ملف المفتاح من النص المشفر
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        
-        # 2. البحث عن أحدث إصدار من أدوات بناء الأندرويد الموجودة في السيرفر تلقائياً
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1  )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
-        
-        # 3. تحديد مسار التطبيق غير الموقع
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
         ALIGNED_APK="app-aligned.apk"
         SIGNED_APK="Alshehab-Pro.apk"
-        
-        # 4. محاذاة التطبيق (Zipalign)
         $ZIPALIGN -v -p 4 $APK_PATH $ALIGNED_APK
-        
-        # 5. توقيع التطبيق (Apksigner)
         $APKSIGNER sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out $SIGNED_APK $ALIGNED_APK
 
     - name: 🚀 Publish to GitHub Releases
@@ -113,3 +113,20 @@ jobs:
         files: Alshehab-Pro.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 📢 Send Telegram Notification
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        ADMIN_ID: ${{ secrets.ADMIN_ID }}
+      run: |
+        MESSAGE="✅ *تم بناء تطبيق الشهاب Pro بنجاح!* 🚀%0A%0A📦 *الإصدار:* أحدث نسخة رسمية (Release)%0A🔗 *رابط التحميل المباشر:*%0Ahttps://github.com/${{ github.repository }}/releases/download/latest/Alshehab-Pro.apk"
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          -d chat_id="${ADMIN_ID}" \
+          -d text="${MESSAGE}" \
+          -d parse_mode="Markdown"
+
+    - name: 🤖 Auto-Bump App Version on Server
+      env:
+        API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
+      run: |
+        curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}"
