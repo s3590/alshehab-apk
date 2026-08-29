@@ -18,14 +18,13 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24' # 🌟 تم التحديث إلى الإصدار الأحدث لتجنب التحذير
+        node-version: '24' # تم التحديث لتجنب التحذيرات
 
     - name: ☕ Setup Java
-      uses: actions/setup-java@v5 # 🌟 تم التحديث إلى الإصدار الخامس
+      uses: actions/setup-java@v5 # تم التحديث للإصدار الخامس
       with:
         distribution: 'zulu'
         java-version: '17'
-        # 🌟 تم حذف سطر الكاش لأنه يسبب الخطأ
 
     - name: 📦 Install Dependencies
       run: |
@@ -46,7 +45,7 @@ jobs:
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2  ));
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
         "
 
     - name: 🤖 Add Android Platform
@@ -57,7 +56,7 @@ jobs:
     - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        # استخدام --fail لضمان توقف البناء إذا كان السيرفر معطلاً بدلاً من وضع أيقونات فارغة
+        # سحب الأيقونة الأصلية من الرابط الخاص بك
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
@@ -95,6 +94,7 @@ jobs:
         alias: ${{ secrets.KEY_ALIAS }}
         keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
+        buildToolsVersion: '34.0.0' # 🌟 تم إضافة هذا السطر لحل مشكلة أدوات البناء
 
     - name: 🏷️ Rename Signed APK
       run: |
