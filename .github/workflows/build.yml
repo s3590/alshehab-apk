@@ -30,8 +30,8 @@ jobs:
       run: |
         npm install --legacy-peer-deps
         npm install @capacitor/assets -D --legacy-peer-deps
-        # 🌟 إضافة مكتبات نظام الملفات وفتح التطبيقات للتحديث الداخلي (تم تصحيح اسم حزمة file-opener)
-        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capacitor-community/file-opener@5 --legacy-peer-deps
+        # 🌟 تم دمج الحزم المطلوبة وتصحيح اسم حزمة file-opener إلى capawesome-team
+        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
 
     - name: ⚙️ Prepare Config & Web Assets
       run: |
@@ -47,7 +47,7 @@ jobs:
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
           c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2    ));
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
         "
 
     - name: 🤖 Add Android Platform
@@ -62,7 +62,7 @@ jobs:
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional    )
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -95,7 +95,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1   )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1 )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -105,7 +105,7 @@ jobs:
         $APKSIGNER sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out $SIGNED_APK $ALIGNED_APK
 
     - name: 🚀 Publish to GitHub Releases
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
         name: "الشهاب Pro - أحدث إصدار 🚀"
