@@ -3,96 +3,110 @@ name: Build and Release Android APK
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:
+  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً بضغطة زر
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 🌟 إعطاء صلاحية لرفع التطبيق للرابط المباشر (GitHub Releases)
+      contents: write # مطلوب لرفع التطبيق إلى صفحة الإصدارات (Releases)
 
     steps:
-    - name: Checkout code
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
+    - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm' # ⚡ تسريع تثبيت الحزم
 
-    - name: Setup Java
+    - name: ☕ Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
+        cache: 'gradle' # ⚡ تسريع بناء الأندرويد
 
-    - name: Install Dependencies
+    - name: 📦 Install Dependencies
       run: |
         npm install --legacy-peer-deps
         npm install @capacitor/assets -D --legacy-peer-deps
-        npm install @capgo/capacitor-native-biometric@5 --legacy-peer-deps
-        npm install @capacitor/app@5 --legacy-peer-deps
-        npm install @capacitor/splash-screen@5 --legacy-peer-deps
-        npm install @capacitor/push-notifications@5 --legacy-peer-deps # 🌟 إضافة مكتبة الإشعارات المفقودة
-        npm install @capacitor-firebase/analytics@5 --legacy-peer-deps
-        npm install @capacitor-firebase/crashlytics@5 --legacy-peer-deps
+        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 --legacy-peer-deps
 
-    - name: Prepare www folder
+    - name: ⚙️ Prepare Config & Web Assets
       run: |
         mkdir -p www
-        echo "<html><body>Loading...</body></html>" > www/index.html
-        # 🌟 الإصلاح الجذري: دمج إعدادات شاشة الإقلاع + توجيه التطبيق لرابط السيرفر لمنع الشاشة البيضاء
-        node -e "const fs=require('fs'); try { let c=JSON.parse(fs.readFileSync('capacitor.config.json')); c.plugins = c.plugins || {}; c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' }; c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true }; fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 )); } catch(e) { console.error(e); }"
+        echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
+        
+        # حقن إعدادات الشاشة الافتتاحية ورابط السيرفر
+        node -e "
+          const fs = require('fs');
+          let c = { plugins: {}, server: {} };
+          try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
+          c.plugins = c.plugins || {};
+          c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
+          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
+        "
 
-    - name: Add Android Platform
+    - name: 🤖 Add Android Platform
       run: |
         npx cap add android
         npx cap sync android
 
-    - name: Generate App Icons
+    - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        curl --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
+        # استخدام --fail لضمان توقف البناء إذا كان السيرفر معطلاً بدلاً من وضع أيقونات فارغة
+        curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
-    - name: Add Custom Sound
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
-        cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || true
+        cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
 
-    - name: Copy google-services.json
+    - name: 🔥 Inject Firebase & Fix SDK
       run: |
-        cp google-services.json android/app/ || true
-
-    - name: Inject Firebase, Crashlytics & Fix SDK Version
-      run: |
-        # 🌟 إجبار التطبيق على دعم الهواتف القديمة (أندرويد 5.1 فما فوق )
-        sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle || true
+        # نسخ ملف جوجل إذا كان موجوداً
+        cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
         
-        # 🌟 إضافة الفايربيس
-        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
+        # دعم الهواتف القديمة (أندرويد 5.1+)
+        sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
+        
+        # حقن الفايربيس في ملفات Gradle
+        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
 
-    - name: Build Release APK
+    - name: 🏗️ Build Release APK
       run: |
         cd android
         chmod +x gradlew
-        # 🌟 بناء نسخة رسمية (Release) بدلاً من نسخة المطورين (Debug)
         ./gradlew assembleRelease
 
-    - name: Rename APK
-      run: |
-        # 🌟 إعادة تسمية الملف الناتج ليكون جاهزاً للرفع
-        mv android/app/build/outputs/apk/release/app-release-unsigned.apk Alshehab-Pro.apk || mv android/app/build/outputs/apk/release/app-release.apk Alshehab-Pro.apk
+    - name: 🔐 Sign APK
+      uses: r0adkll/sign-android-release@v1
+      id: sign_app
+      with:
+        releaseDirectory: android/app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+        alias: ${{ secrets.KEY_ALIAS }}
+        keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+        keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    - name: Create Permanent Download Link (GitHub Release)
+    - name: 🏷️ Rename Signed APK
+      run: |
+        mv ${{steps.sign_app.outputs.signedReleaseFile}} Alshehab-Pro.apk
+
+    - name: 🚀 Publish to GitHub Releases
       uses: softprops/action-gh-release@v1
       with:
         tag_name: latest
         name: "الشهاب Pro - أحدث إصدار 🚀"
-        body: "قم بتحميل أحدث نسخة من تطبيق الشهاب Pro. (يتم التحديث تلقائياً)"
+        body: "قم بتحميل أحدث نسخة رسمية وموقعة من تطبيق الشهاب Pro. (جاهز للتثبيت على جميع الهواتف)"
         files: Alshehab-Pro.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
