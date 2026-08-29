@@ -15,7 +15,7 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
 
-     - name: 🟢 Setup Node.js
+    - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '24' # 🌟 تم التحديث إلى الإصدار الأحدث لتجنب التحذير
@@ -46,7 +46,7 @@ jobs:
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2  ));
         "
 
     - name: 🤖 Add Android Platform
