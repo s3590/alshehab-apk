@@ -38,16 +38,16 @@ jobs:
         mkdir -p www
         echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
         
-        # 🌟 تفعيل المحرك الداخلي (CapacitorHttp) لتخطي حظر التحميل (CORS)
-        # 🌟 إضافة رقم الإصدار التلقائي (github.run_number) إلى الرابط
+        # 🌟 تفعيل الإخفاء التلقائي للشعار وتمرير الإصدار عبر User-Agent لمنع التعليق
         node -e "
           const fs = require('fs');
-          let c = { plugins: {}, server: {} };
+          let c = { plugins: {}, server: {}, android: {} };
           try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
           c.plugins = c.plugins || {};
-          c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
+          c.plugins.SplashScreen = { launchShowDuration: 2000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
-          c.server = { url: 'https://my-bot-ehio.onrender.com?apk_version=${{ github.run_number }}', cleartext: true };
+          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
+          c.android = { appendUserAgent: 'AlshehabAPK/${{ github.run_number }}' };
           fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
         "
 
@@ -68,7 +68,7 @@ jobs:
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
 
-    - name: 🔥 Inject Permissions & Deep Links
+    - name: 🔥 Inject Permissions, Deep Links & Version
       run: |
         cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
         sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
@@ -76,10 +76,14 @@ jobs:
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
         
+        # 🌟 تحديث رقم الإصدار الأصلي للتطبيق ليظهر بشكل صحيح في الهاتف
+        sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
+        sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
+        
         # 🌟 إضافة صلاحيات تثبيت التحديثات من داخل التطبيق
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
         
-        # 🌟 إضافة كود الروابط العميقة (Deep Linking) لكي يفتح التطبيق عند الضغط على رابط موقعك
+        # 🌟 إضافة كود الروابط العميقة (Deep Linking)
         sed -i '/<\/activity>/i \            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>' android/app/src/main/AndroidManifest.xml
 
     - name: 🚀 Inject App Shortcuts (Long Press Menu )
@@ -88,7 +92,7 @@ jobs:
         mkdir -p android/app/src/main/res/drawable
         mkdir -p android/app/src/main/res/values
 
-        # 📝 1. إنشاء نصوص الاختصارات (Strings)
+        # 📝 1. إنشاء نصوص الاختصارات (Strings) لحل مشكلة البناء
         cat <<EOF > android/app/src/main/res/values/shortcut_strings.xml
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
