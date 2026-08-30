@@ -30,23 +30,55 @@ jobs:
       run: |
         npm install --legacy-peer-deps
         npm install @capacitor/assets -D --legacy-peer-deps
-        # 🌟 تم دمج الحزم المطلوبة وتصحيح اسم حزمة file-opener إلى capawesome-team
         npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
 
-    - name: ⚙️ Prepare Config & Web Assets
+    - name: ⚙️ Prepare Config & Web Assets (With Telegram Error Reporter)
       run: |
         mkdir -p www
-        echo "<html><body style='background-color:#050b14; color:white; text-align:center; margin-top:50%;'>Loading...</body></html>" > www/index.html
         
-        # 🌟 تفعيل الإخفاء التلقائي للشعار وتمرير الإصدار عبر User-Agent لمنع التعليق
+        # 🚨 إنشاء صفحة طوارئ ترسل الخطأ للتليجرام إذا فشل الاتصال بالسيرفر
+        cat <<EOF > www/index.html
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="background-color:#050b14; color:white; text-align:center; padding-top:40%; font-family: sans-serif;">
+            <h2 style="color:#ff4757;">🚨 فشل الاتصال بالسيرفر</h2>
+            <p>التطبيق لا يستطيع الوصول إلى موقعك.</p>
+            <p style="color:#aaa; font-size:12px;">تم إرسال تقرير بالخطأ إلى التليجرام.</p>
+            <script>
+                // إجبار الشعار على الاختفاء
+                setTimeout(() => {
+                    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+                        window.Capacitor.Plugins.SplashScreen.hide();
+                    }
+                }, 1000);
+                
+                // إرسال رسالة للتليجرام
+                fetch('https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        chat_id: '${{ secrets.ADMIN_ID }}',
+                        text: '🚨 **تنبيه من التطبيق:**\nالتطبيق المثبت على الهاتف لا يستطيع الوصول إلى السيرفر (https://my-bot-ehio.onrender.com ).\nالشاشة معلقة على الملف المحلي (www/index.html).'
+                    })
+                });
+            </script>
+        </body>
+        </html>
+        EOF
+        
+        # 🌟 تفعيل الإخفاء التلقائي للشعار (launchAutoHide: true) لكي لا يعلق أبداً
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {}, android: {} };
           try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
           c.plugins = c.plugins || {};
-          c.plugins.SplashScreen = { launchShowDuration: 2000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
+          c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
-          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true };
+          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true, allowNavigation: ['*'] };
           c.android = { appendUserAgent: 'AlshehabAPK/${{ github.run_number }}' };
           fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
         "
@@ -76,14 +108,11 @@ jobs:
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
         
-        # 🌟 تحديث رقم الإصدار الأصلي للتطبيق ليظهر بشكل صحيح في الهاتف
         sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
         sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
         
-        # 🌟 إضافة صلاحيات تثبيت التحديثات من داخل التطبيق
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
         
-        # 🌟 إضافة كود الروابط العميقة (Deep Linking)
         sed -i '/<\/activity>/i \            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>' android/app/src/main/AndroidManifest.xml
 
     - name: 🚀 Inject App Shortcuts (Long Press Menu )
@@ -92,7 +121,6 @@ jobs:
         mkdir -p android/app/src/main/res/drawable
         mkdir -p android/app/src/main/res/values
 
-        # 📝 1. إنشاء نصوص الاختصارات (Strings) لحل مشكلة البناء
         cat <<EOF > android/app/src/main/res/values/shortcut_strings.xml
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
@@ -103,21 +131,18 @@ jobs:
         </resources>
         EOF
 
-        # 🎨 2. إنشاء أيقونة التسديدات (شكل هاتف)
         cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_telecom.xml
         <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
             <path android:fillColor="#00d2ff" android:pathData="M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z"/>
         </vector>
         EOF
 
-        # 🎨 3. إنشاء أيقونة نقطة البيع (شكل سلة تسوق )
         cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_pos.xml
         <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
             <path android:fillColor="#38ef7d" android:pathData="M7,18c-1.1,0 -1.99,0.9 -1.99,2S5.9,22 7,22s2,-0.9 2,-2S8.1,18 7,18zM17,18c-1.1,0 -1.99,0.9 -1.99,2s0.89,2 1.99,2s2,-0.9 2,-2S18.1,18 17,18zM7.17,14.75l0.03,-0.12 1.68,-3.06h7.45c0.75,0 1.41,-0.41 1.75,-1.03l3.58,-6.49c0.08,-0.14 0.12,-0.31 0.12,-0.48 0,-0.55 -0.45,-1 -1,-1H5.21l-0.94,-2H1v2h2l3.6,7.59 -1.35,2.44C4.52,15.37 5.48,17 7,17h12v-2H7l0.17,-0.25z"/>
         </vector>
         EOF
 
-        # ⚙️ 4. إنشاء ملف الاختصارات وربطه بالنصوص والأيقونات
         cat <<EOF > android/app/src/main/res/xml/shortcuts.xml
         <?xml version="1.0" encoding="utf-8"?>
         <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
@@ -130,7 +155,6 @@ jobs:
         </shortcuts>
         EOF
         
-        # 🔗 5. إخبار الأندرويد بوجود هذا الملف داخل AndroidManifest
         sed -i '/<\/activity>/i \            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
@@ -181,5 +205,4 @@ jobs:
       env:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
-        # 🌟 إرسال رقم الإصدار التلقائي للسيرفر ليحفظه
         curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
