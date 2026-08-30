@@ -48,7 +48,7 @@ jobs:
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: false, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
           c.server = { url: 'https://my-bot-ehio.onrender.com?apk_version=${{ github.run_number }}', cleartext: true };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2  ));
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
         "
 
     - name: 🤖 Add Android Platform
@@ -63,7 +63,7 @@ jobs:
         curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional  )
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -86,35 +86,47 @@ jobs:
       run: |
         mkdir -p android/app/src/main/res/xml
         mkdir -p android/app/src/main/res/drawable
+        mkdir -p android/app/src/main/res/values
 
-        # 🎨 1. إنشاء أيقونة التسديدات (شكل هاتف)
+        # 📝 1. إنشاء نصوص الاختصارات (Strings)
+        cat <<EOF > android/app/src/main/res/values/shortcut_strings.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <string name="shortcut_telecom_short">التسديدات</string>
+            <string name="shortcut_telecom_long">فتح قسم التسديدات</string>
+            <string name="shortcut_pos_short">نقطة البيع</string>
+            <string name="shortcut_pos_long">فتح نقطة البيع السريعة</string>
+        </resources>
+        EOF
+
+        # 🎨 2. إنشاء أيقونة التسديدات (شكل هاتف)
         cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_telecom.xml
         <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
             <path android:fillColor="#00d2ff" android:pathData="M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z"/>
         </vector>
         EOF
 
-        # 🎨 2. إنشاء أيقونة نقطة البيع (شكل سلة تسوق )
+        # 🎨 3. إنشاء أيقونة نقطة البيع (شكل سلة تسوق )
         cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_pos.xml
         <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
             <path android:fillColor="#38ef7d" android:pathData="M7,18c-1.1,0 -1.99,0.9 -1.99,2S5.9,22 7,22s2,-0.9 2,-2S8.1,18 7,18zM17,18c-1.1,0 -1.99,0.9 -1.99,2s0.89,2 1.99,2s2,-0.9 2,-2S18.1,18 17,18zM7.17,14.75l0.03,-0.12 1.68,-3.06h7.45c0.75,0 1.41,-0.41 1.75,-1.03l3.58,-6.49c0.08,-0.14 0.12,-0.31 0.12,-0.48 0,-0.55 -0.45,-1 -1,-1H5.21l-0.94,-2H1v2h2l3.6,7.59 -1.35,2.44C4.52,15.37 5.48,17 7,17h12v-2H7l0.17,-0.25z"/>
         </vector>
         EOF
 
-        # ⚙️ 3. إنشاء ملف الاختصارات وربطه بالأيقونات الجديدة
+        # ⚙️ 4. إنشاء ملف الاختصارات وربطه بالنصوص والأيقونات
         cat <<EOF > android/app/src/main/res/xml/shortcuts.xml
         <?xml version="1.0" encoding="utf-8"?>
         <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-            <shortcut android:shortcutId="telecom" android:enabled="true" android:icon="@drawable/ic_shortcut_telecom" android:shortcutShortLabel="التسديدات" android:shortcutLongLabel="فتح قسم التسديدات">
+            <shortcut android:shortcutId="telecom" android:enabled="true" android:icon="@drawable/ic_shortcut_telecom" android:shortcutShortLabel="@string/shortcut_telecom_short" android:shortcutLongLabel="@string/shortcut_telecom_long">
                 <intent android:action="android.intent.action.VIEW" android:data="https://my-bot-ehio.onrender.com?action=telecom" />
             </shortcut>
-            <shortcut android:shortcutId="pos" android:enabled="true" android:icon="@drawable/ic_shortcut_pos" android:shortcutShortLabel="نقطة البيع" android:shortcutLongLabel="فتح نقطة البيع السريعة">
+            <shortcut android:shortcutId="pos" android:enabled="true" android:icon="@drawable/ic_shortcut_pos" android:shortcutShortLabel="@string/shortcut_pos_short" android:shortcutLongLabel="@string/shortcut_pos_long">
                 <intent android:action="android.intent.action.VIEW" android:data="https://my-bot-ehio.onrender.com?action=pos" />
             </shortcut>
         </shortcuts>
         EOF
         
-        # 🔗 4. إخبار الأندرويد بوجود هذا الملف داخل AndroidManifest
+        # 🔗 5. إخبار الأندرويد بوجود هذا الملف داخل AndroidManifest
         sed -i '/<\/activity>/i \            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
@@ -131,7 +143,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1  )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1 )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
