@@ -32,34 +32,45 @@ jobs:
         npm install @capacitor/assets -D --legacy-peer-deps
         npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
 
-    - name: ⚙️ Prepare Config & Web Assets (Offline Mode Fix)
+    - name: ⚙️ Prepare Config & Web Assets (The Ultimate Offline Fix)
       run: |
         mkdir -p www
         mkdir -p www/static
         
-        # 🌟 السحر هنا: تحميل ملفات موقعك ووضعها "داخل" التطبيق ليعمل أوفلاين 100%
+        # 🌟 تحميل ملفات الموقع لتعمل أوفلاين من داخل التطبيق
         curl -L --retry 5 -o www/index.html https://my-bot-ehio.onrender.com/
         curl -L --retry 5 -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
         curl -L --retry 5 -o www/static/localforage.min.js https://my-bot-ehio.onrender.com/static/localforage.min.js
         curl -L --retry 5 -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
         curl -L --retry 5 -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
-        # 🌟 إزالة رابط السيرفر (server.url ) لكي يقرأ التطبيق الملفات من داخل الهاتف بدلاً من الإنترنت
-        # 🚨 تم حذف CapacitorHttp لأنه يكسر إرسال البيانات (FormData) للسيرفر
-        node -e "
-          const fs = require('fs');
-          let c = { plugins: {}, server: {}, android: {} };
-          try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
-          
-          if(c.server) delete c.server.url; 
-          c.server.cleartext = true;
-          
-          c.plugins = c.plugins || {};
-          c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
-          c.android = { appendUserAgent: 'AlshehabAPK/${{ github.run_number }}' };
-          
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
-        "
+        # 🚨 الضربة القاضية: حذف ملفات الإعدادات القديمة التي تعاندنا وتجبر التطبيق على فتح الإنترنت
+        rm -f capacitor.config.ts
+        rm -f capacitor.config.js
+        
+        # 🌟 إنشاء ملف إعدادات نظيف 100% بدون رابط السيرفر (server.url )
+        cat <<EOF > capacitor.config.json
+        {
+          "appId": "com.alshehab.pro",
+          "appName": "الشهاب pro",
+          "webDir": "www",
+          "plugins": {
+            "PushNotifications": {
+              "presentationOptions": ["badge", "sound", "alert"]
+            },
+            "SplashScreen": {
+              "launchShowDuration": 3000,
+              "launchAutoHide": true,
+              "backgroundColor": "#050b14",
+              "androidSplashResourceName": "splash",
+              "androidScaleType": "CENTER_CROP"
+            }
+          },
+          "android": {
+            "appendUserAgent": "AlshehabAPK/${{ github.run_number }}"
+          }
+        }
+        EOF
 
     - name: 🤖 Add Android Platform
       run: |
@@ -69,11 +80,12 @@ jobs:
     - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        curl -L --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl -L --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
+        # 🌟 استخدام الشعار الذي حملناه للتو بدلاً من تحميله مرة أخرى
+        cp www/static/logo.png assets/icon.png
+        cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional )
+    - name: 🎵 Add Custom Sound (Optional)
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
