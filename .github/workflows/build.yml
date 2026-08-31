@@ -32,55 +32,33 @@ jobs:
         npm install @capacitor/assets -D --legacy-peer-deps
         npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
 
-    - name: ⚙️ Prepare Config & Web Assets (With Telegram Error Reporter)
+    - name: ⚙️ Prepare Config & Web Assets (Offline Mode Fix)
       run: |
         mkdir -p www
+        mkdir -p www/static
         
-        # 🚨 إنشاء صفحة طوارئ ترسل الخطأ للتليجرام إذا فشل الاتصال بالسيرفر
-        cat <<EOF > www/index.html
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="background-color:#050b14; color:white; text-align:center; padding-top:40%; font-family: sans-serif;">
-            <h2 style="color:#ff4757;">🚨 فشل الاتصال بالسيرفر</h2>
-            <p>التطبيق لا يستطيع الوصول إلى موقعك.</p>
-            <p style="color:#aaa; font-size:12px;">تم إرسال تقرير بالخطأ إلى التليجرام.</p>
-            <script>
-                // إجبار الشعار على الاختفاء
-                setTimeout(() => {
-                    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
-                        window.Capacitor.Plugins.SplashScreen.hide();
-                    }
-                }, 1000);
-                
-                // إرسال رسالة للتليجرام
-                fetch('https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        chat_id: '${{ secrets.ADMIN_ID }}',
-                        text: '🚨 **تنبيه من التطبيق:**\nالتطبيق المثبت على الهاتف لا يستطيع الوصول إلى السيرفر (https://my-bot-ehio.onrender.com ).\nالشاشة معلقة على الملف المحلي (www/index.html).'
-                    })
-                });
-            </script>
-        </body>
-        </html>
-        EOF
+        # 🌟 السحر هنا: تحميل ملفات موقعك ووضعها "داخل" التطبيق ليعمل أوفلاين 100%
+        curl -L --retry 5 -o www/index.html https://my-bot-ehio.onrender.com/
+        curl -L --retry 5 -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
+        curl -L --retry 5 -o www/static/localforage.min.js https://my-bot-ehio.onrender.com/static/localforage.min.js
+        curl -L --retry 5 -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl -L --retry 5 -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
-        # 🌟 تفعيل الإخفاء التلقائي للشعار (launchAutoHide: true) لكي لا يعلق أبداً
+        # 🌟 إزالة رابط السيرفر (server.url ) لكي يقرأ التطبيق الملفات من داخل الهاتف بدلاً من الإنترنت
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {}, android: {} };
           try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
+          
+          if(c.server) delete c.server.url; // 🚨 هذا السطر هو الذي يضمن عمل الأوفلاين!
+          c.server.cleartext = true;
+          
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
           c.plugins.CapacitorHttp = { enabled: true };
-          c.server = { url: 'https://my-bot-ehio.onrender.com', cleartext: true, allowNavigation: ['*'] };
           c.android = { appendUserAgent: 'AlshehabAPK/${{ github.run_number }}' };
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2 ));
+          
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
         "
 
     - name: 🤖 Add Android Platform
@@ -91,8 +69,8 @@ jobs:
     - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl -L --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/icon.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl -L --fail --retry 5 --retry-all-errors --retry-delay 5 -o assets/splash.png https://my-bot-ehio.onrender.com/static/logo.png
         npx capacitor-assets generate --android
 
     - name: 🎵 Add Custom Sound (Optional )
@@ -104,7 +82,7 @@ jobs:
       run: |
         cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
         sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
-        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle
+        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
         echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
         echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
         
@@ -113,7 +91,8 @@ jobs:
         
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
         
-        sed -i '/<\/activity>/i \            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>' android/app/src/main/AndroidManifest.xml
+        # 🌟 الإصلاح الأمني: الحقن عند أول </activity> فقط لمنع كسر الملف
+        sed -i '0,/<\/activity>/s/<\/activity>/            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" \/>\n            <\/intent-filter>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
 
     - name: 🚀 Inject App Shortcuts (Long Press Menu )
       run: |
@@ -155,7 +134,8 @@ jobs:
         </shortcuts>
         EOF
         
-        sed -i '/<\/activity>/i \            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />' android/app/src/main/AndroidManifest.xml
+        # 🌟 الإصلاح الأمني: الحقن عند أول </activity> فقط
+        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
       run: |
@@ -171,7 +151,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1 )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1  )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -206,5 +186,3 @@ jobs:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
         curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
-
-       
