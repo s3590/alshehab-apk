@@ -45,17 +45,17 @@ jobs:
         curl -L --retry 5 -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
         # 🌟 إزالة رابط السيرفر (server.url ) لكي يقرأ التطبيق الملفات من داخل الهاتف بدلاً من الإنترنت
+        # 🚨 تم حذف CapacitorHttp لأنه يكسر إرسال البيانات (FormData) للسيرفر
         node -e "
           const fs = require('fs');
           let c = { plugins: {}, server: {}, android: {} };
           try { c = JSON.parse(fs.readFileSync('capacitor.config.json')); } catch(e) {}
           
-          if(c.server) delete c.server.url; // 🚨 هذا السطر هو الذي يضمن عمل الأوفلاين!
+          if(c.server) delete c.server.url; 
           c.server.cleartext = true;
           
           c.plugins = c.plugins || {};
           c.plugins.SplashScreen = { launchShowDuration: 3000, launchAutoHide: true, backgroundColor: '#050b14', androidSplashResourceName: 'splash', androidScaleType: 'CENTER_CROP' };
-          c.plugins.CapacitorHttp = { enabled: true };
           c.android = { appendUserAgent: 'AlshehabAPK/${{ github.run_number }}' };
           
           fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
@@ -134,8 +134,7 @@ jobs:
         </shortcuts>
         EOF
         
-        # 🌟 الإصلاح الأمني: الحقن عند أول </activity> فقط
-        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
+        sed -i '/<\/activity>/i \            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
       run: |
