@@ -134,7 +134,7 @@ jobs:
         </shortcuts>
         EOF
         
-        sed -i '/<\/activity>/i \            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>' android/app/src/main/AndroidManifest.xml
+        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
       run: |
@@ -185,4 +185,3 @@ jobs:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
         curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
-
