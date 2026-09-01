@@ -2,14 +2,23 @@
   "appId": "com.alshehab.pro",
   "appName": "الشهاب pro",
   "webDir": "www",
-  "server": {
-    "url": "https://my-bot-ehio.onrender.com",
-    "cleartext": true
-  },
   "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
     "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    },
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "backgroundColor": "#050b14",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP"
     }
   }
 }
-
