@@ -32,32 +32,29 @@ jobs:
         npm install @capacitor/assets -D --legacy-peer-deps
         npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
 
-    - name: ⚙️ Prepare Config & Web Assets (The Ultimate Offline Fix)
+    - name: ⚙️ Prepare Config & Web Assets (Robust Offline)
       run: |
-        mkdir -p www
         mkdir -p www/static
         
-        # 🌟 تحميل ملفات الموقع لتعمل أوفلاين من داخل التطبيق
-        curl -L --retry 5 -o www/index.html https://my-bot-ehio.onrender.com/
-        curl -L --retry 5 -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
-        curl -L --retry 5 -o www/static/localforage.min.js https://my-bot-ehio.onrender.com/static/localforage.min.js
-        curl -L --retry 5 -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl -L --retry 5 -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
+        # 🌟 استخدام --fail لضمان عدم حفظ صفحات خطأ
+        CURL_OPTS="--fail --show-error --location --retry 5 --retry-delay 2"
+        curl $CURL_OPTS -o www/index.html https://my-bot-ehio.onrender.com/
+        curl $CURL_OPTS -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
+        curl $CURL_OPTS -o www/static/localforage.min.js https://my-bot-ehio.onrender.com/static/localforage.min.js
+        curl $CURL_OPTS -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
+        curl $CURL_OPTS -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
-        # 🚨 الضربة القاضية: حذف ملفات الإعدادات القديمة التي تعاندنا وتجبر التطبيق على فتح الإنترنت
-        rm -f capacitor.config.ts
-        rm -f capacitor.config.js
+        rm -f capacitor.config.ts capacitor.config.js
         
-        # 🌟 إنشاء ملف إعدادات نظيف 100% بدون رابط السيرفر (server.url )
+        # 🌟 تفعيل CapacitorHttp للتحديث الداخلي
         cat <<EOF > capacitor.config.json
         {
           "appId": "com.alshehab.pro",
           "appName": "الشهاب pro",
           "webDir": "www",
           "plugins": {
-            "PushNotifications": {
-              "presentationOptions": ["badge", "sound", "alert"]
-            },
+            "CapacitorHttp": { "enabled": true },
+            "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
             "SplashScreen": {
               "launchShowDuration": 3000,
               "launchAutoHide": true,
@@ -66,9 +63,7 @@ jobs:
               "androidScaleType": "CENTER_CROP"
             }
           },
-          "android": {
-            "appendUserAgent": "AlshehabAPK/${{ github.run_number }}"
-          }
+          "android": { "appendUserAgent": "AlshehabAPK/${{ github.run_number }}" }
         }
         EOF
 
@@ -80,33 +75,16 @@ jobs:
     - name: 🎨 Generate App Icons
       run: |
         mkdir -p assets
-        # 🌟 استخدام الشعار الذي حملناه للتو بدلاً من تحميله مرة أخرى
         cp www/static/logo.png assets/icon.png
         cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional)
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
 
-    - name: 🔥 Inject Permissions, Deep Links & Version
-      run: |
-        cp google-services.json android/app/ || echo "Warning: google-services.json not found!"
-        sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
-        sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
-        echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
-        echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
-        
-        sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
-        sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
-        
-        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
-        
-        # 🌟 الإصلاح الأمني: الحقن عند أول </activity> فقط لمنع كسر الملف
-        sed -i '0,/<\/activity>/s/<\/activity>/            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" \/>\n            <\/intent-filter>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
-
-    - name: 🚀 Inject App Shortcuts (Long Press Menu )
+    - name: 🚀 Inject App Shortcuts XML
       run: |
         mkdir -p android/app/src/main/res/xml
         mkdir -p android/app/src/main/res/drawable
@@ -145,8 +123,28 @@ jobs:
             </shortcut>
         </shortcuts>
         EOF
+
+    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional )
+      run: |
+        # 🌟 تفعيل Firebase بأمان
+        if [ -f google-services.json ]; then
+          cp google-services.json android/app/
+          sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
+          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
+          echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
+        else
+          echo "⚠️ google-services.json not found, skipping Firebase."
+        fi
         
-        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
+        sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
+        sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
+        sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
+        
+        # 🌟 إضافة جميع الصلاحيات المهمة
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+        
+        # 🌟 دمج حقن الـ Deep Links والـ Shortcuts
+        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" \/>\n            <\/intent-filter>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
       run: |
@@ -161,8 +159,8 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1  )
+        echo "${KEYSTORE_BASE64}" | base64 -d > release.keystore
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1  )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -196,4 +194,4 @@ jobs:
       env:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
-        curl -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
+        curl -s -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
