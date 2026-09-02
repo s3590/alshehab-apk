@@ -18,7 +18,7 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24'
 
     - name: ☕ Setup Java
       uses: actions/setup-java@v5
@@ -82,7 +82,7 @@ jobs:
         cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional   )
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -127,7 +127,7 @@ jobs:
         </shortcuts>
         EOF
 
-    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional   )
+    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional )
       run: |
         # 🌟 تفعيل Firebase بأمان
         if [ -f google-services.json ]; then
@@ -163,7 +163,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "${KEYSTORE_BASE64}" | base64 -d > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1    )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1 )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -179,7 +179,6 @@ jobs:
         name: "الشهاب Pro - أحدث إصدار 🚀"
         body: "قم بتحميل أحدث نسخة رسمية وموقعة من تطبيق الشهاب Pro. (جاهز للتثبيت على جميع الهواتف)"
         files: Alshehab-Pro.apk
-        allowUpdates: true
         make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
