@@ -195,3 +195,4 @@ jobs:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
         curl -s -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
+
