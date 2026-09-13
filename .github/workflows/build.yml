@@ -50,12 +50,16 @@ jobs:
         
         rm -f capacitor.config.ts capacitor.config.js
         
-        # 🌟 التعديل 2: إزالة CapacitorHttp لحماية عمليات البيع والبيانات المعقدة
+        # 🌟 الإصلاح الكارثي: إضافة قسم server لكي يتصل التطبيق بموقعك!
         cat <<EOF > capacitor.config.json
         {
           "appId": "com.alshehab.pro",
           "appName": "الشهاب pro",
           "webDir": "www",
+          "server": {
+            "url": "https://my-bot-ehio.onrender.com",
+            "cleartext": true
+          },
           "plugins": {
             "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
             "SplashScreen": {
@@ -82,7 +86,7 @@ jobs:
         cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional  )
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -127,7 +131,7 @@ jobs:
         </shortcuts>
         EOF
 
-    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional  )
+    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional )
       run: |
         # 🌟 تفعيل Firebase بأمان
         if [ -f google-services.json ]; then
@@ -163,7 +167,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "${KEYSTORE_BASE64}" | base64 -d > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1  )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1 )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -176,7 +180,6 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        # 🌟 التعديل 3: حل مشكلة HttpError لإنشاء رابط التحميل بنجاح
         target_commitish: ${{ github.sha }}
         name: "الشهاب Pro - أحدث إصدار 🚀"
         body: "قم بتحميل أحدث نسخة رسمية وموقعة من تطبيق الشهاب Pro. (جاهز للتثبيت على جميع الهواتف)"
@@ -201,4 +204,3 @@ jobs:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
         curl -s -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
-        
