@@ -40,7 +40,8 @@ jobs:
         CURL_OPTS="--fail --show-error --location --retry 5 --retry-delay 2"
         curl $CURL_OPTS -o www/index.html https://my-bot-ehio.onrender.com/
         curl $CURL_OPTS -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
-        curl $CURL_OPTS -o www/static/localforage.min.js https://my-bot-ehio.onrender.com/static/localforage.min.js
+        # 🌟 التعديل 1: جلب مكتبة الأوفلاين من المصدر الرسمي لضمان سلامتها
+        curl $CURL_OPTS -o www/static/localforage.min.js https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js
         curl $CURL_OPTS -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
         curl $CURL_OPTS -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
@@ -49,14 +50,13 @@ jobs:
         
         rm -f capacitor.config.ts capacitor.config.js
         
-        # 🌟 تفعيل CapacitorHttp للتحديث الداخلي
+        # 🌟 التعديل 2: إزالة CapacitorHttp لحماية عمليات البيع والبيانات المعقدة
         cat <<EOF > capacitor.config.json
         {
           "appId": "com.alshehab.pro",
           "appName": "الشهاب pro",
           "webDir": "www",
           "plugins": {
-            "CapacitorHttp": { "enabled": true },
             "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
             "SplashScreen": {
               "launchShowDuration": 3000,
@@ -82,7 +82,7 @@ jobs:
         cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional )
+    - name: 🎵 Add Custom Sound (Optional  )
       run: |
         mkdir -p android/app/src/main/res/raw
         cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
@@ -127,18 +127,7 @@ jobs:
         </shortcuts>
         EOF
 
-    - name: 🔑 Create google-services.json (For Firebase )
-      env:
-        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-      run: |
-        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-          echo "$GOOGLE_SERVICES_JSON" > google-services.json
-          echo "✅ google-services.json created successfully."
-        else
-          echo "⚠️ GOOGLE_SERVICES_JSON secret is not set. Firebase might not work."
-        fi
-
-    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional)
+    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional  )
       run: |
         # 🌟 تفعيل Firebase بأمان
         if [ -f google-services.json ]; then
@@ -187,6 +176,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
+        # 🌟 التعديل 3: حل مشكلة HttpError لإنشاء رابط التحميل بنجاح
         target_commitish: ${{ github.sha }}
         name: "الشهاب Pro - أحدث إصدار 🚀"
         body: "قم بتحميل أحدث نسخة رسمية وموقعة من تطبيق الشهاب Pro. (جاهز للتثبيت على جميع الهواتف)"
