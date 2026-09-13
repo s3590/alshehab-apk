@@ -2,6 +2,10 @@
   "appId": "com.alshehab.pro",
   "appName": "الشهاب pro",
   "webDir": "www",
+  "server": {
+    "url": "https://my-bot-ehio.onrender.com",
+    "cleartext": true
+  },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
