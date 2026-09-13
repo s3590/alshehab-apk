@@ -14,7 +14,7 @@
     "@capacitor/push-notifications": "^5.0.0",
     "@capacitor/filesystem": "^5.0.0",
     "@capawesome-team/capacitor-file-opener": "^5.0.0",
-    "@epicshaggy/capacitor-native-biometric": "^5.0.0"
+    "@capgo/capacitor-native-biometric": "^5.0.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^5.0.0"
