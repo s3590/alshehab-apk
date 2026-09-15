@@ -18,15 +18,13 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24' # 🌟 عدنا للإصدار 24 لتجنب رسالة التحذير
-        # تم إزالة cache: 'npm' لعدم وجود ملف package-lock.json في المستودع
+        node-version: '24'
 
     - name: ☕ Setup Java
       uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: '17'
-        cache: 'gradle' # 🌟 تسريع بناء الأندرويد عبر حفظ الكاش
 
     - name: 📦 Install Dependencies
       run: |
