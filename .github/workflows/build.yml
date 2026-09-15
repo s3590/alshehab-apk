@@ -18,13 +18,15 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '20'
+        cache: 'npm' # 🌟 تسريع البناء عبر حفظ الكاش
 
     - name: ☕ Setup Java
       uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: '17'
+        cache: 'gradle' # 🌟 تسريع بناء الأندرويد عبر حفظ الكاش
 
     - name: 📦 Install Dependencies
       run: |
@@ -36,34 +38,24 @@ jobs:
       run: |
         mkdir -p www/static
         
-        # 🌟 استخدام --fail لضمان عدم حفظ صفحات خطأ
         CURL_OPTS="--fail --show-error --location --retry 5 --retry-delay 2"
         curl $CURL_OPTS -o www/index.html https://my-bot-ehio.onrender.com/
         curl $CURL_OPTS -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
-        # 🌟 التعديل 1: جلب مكتبة الأوفلاين من المصدر الرسمي لضمان سلامتها
         curl $CURL_OPTS -o www/static/localforage.min.js https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js
         curl $CURL_OPTS -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
         curl $CURL_OPTS -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
         
-        # 👇 السطر السحري: استبدال رقم الإصدار الوهمي برقم البناء الفعلي تلقائياً 👇
         sed -i "s/APP_VERSION_PLACEHOLDER/${{ github.run_number }}/g" www/index.html
         
         rm -f capacitor.config.ts capacitor.config.js
         
-        # 🌟 الإصلاح الكارثي: إضافة قسم server لكي يتصل التطبيق بموقعك!
         cat <<EOF > capacitor.config.json
         {
           "appId": "com.alshehab.pro",
           "appName": "الشهاب pro",
           "webDir": "www",
-          "server": {
-            "url": "https://my-bot-ehio.onrender.com",
-            "cleartext": true,
-            "allowNavigation": [
-              "my-bot-ehio.onrender.com"
-            ]
-          },
           "plugins": {
+            "CapacitorHttp": { "enabled": true },
             "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
             "SplashScreen": {
               "launchShowDuration": 3000,
@@ -89,10 +81,15 @@ jobs:
         cp www/static/logo.png assets/splash.png
         npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional   )
+    - name: 🎵 Add Custom Sound (Optional )
       run: |
         mkdir -p android/app/src/main/res/raw
-        cp bell.mp3 android/app/src/main/res/raw/bell.mp3 || echo "bell.mp3 not found, skipping..."
+        if [ -f "bell.mp3" ]; then
+          cp bell.mp3 android/app/src/main/res/raw/bell.mp3
+          echo "✅ Custom sound added."
+        else
+          echo "⚠️ bell.mp3 not found, skipping..."
+        fi
 
     - name: 🚀 Inject App Shortcuts XML
       run: |
@@ -145,26 +142,21 @@ jobs:
         echo "$GOOGLE_SERVICES_JSON" > google-services.json
         echo "✅ تم إنشاء ملف google-services.json بنجاح."
 
-    - name: 🔥 Inject Permissions, Deep Links & Firebase (Conditional   )
+    - name: 🔥 Inject Permissions, Deep Links & Firebase
       run: |
-        # 🌟 تفعيل Firebase بأمان
         if [ -f google-services.json ]; then
           cp google-services.json android/app/
           sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
           echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
           echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
-        else
-          echo "⚠️ google-services.json not found, skipping Firebase."
         fi
         
         sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
         sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
         sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
         
-        # 🌟 إضافة جميع الصلاحيات المهمة
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
         
-        # 🌟 دمج حقن الـ Deep Links والـ Shortcuts
         sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" \/>\n            <\/intent-filter>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
 
     - name: 🏗️ Build Release APK
@@ -181,7 +173,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         echo "${KEYSTORE_BASE64}" | base64 -d > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1   )
+        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1 )
         ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
         APKSIGNER=$BUILD_TOOLS_DIR/apksigner
         APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -189,6 +181,12 @@ jobs:
         SIGNED_APK="Alshehab-Pro.apk"
         $ZIPALIGN -v -p 4 $APK_PATH $ALIGNED_APK
         $APKSIGNER sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out $SIGNED_APK $ALIGNED_APK
+
+    - name: 📤 Upload APK Artifact (Backup)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Alshehab-Pro-APK
+        path: Alshehab-Pro.apk
 
     - name: 🚀 Publish to GitHub Releases
       uses: softprops/action-gh-release@v2
@@ -218,3 +216,9 @@ jobs:
         API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
       run: |
         curl -s -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
+
+    - name: 🧹 Clean up Secrets
+      if: always( )
+      run: |
+        rm -f release.keystore google-services.json
+        echo "✅ تم مسح الملفات السرية (Keystore & Firebase) من سيرفر البناء بنجاح لحماية الأمان."
