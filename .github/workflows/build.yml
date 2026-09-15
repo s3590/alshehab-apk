@@ -18,8 +18,8 @@ jobs:
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'npm' # 🌟 تسريع البناء عبر حفظ الكاش
+        node-version: '24' # 🌟 عدنا للإصدار 24 لتجنب رسالة التحذير
+        # تم إزالة cache: 'npm' لعدم وجود ملف package-lock.json في المستودع
 
     - name: ☕ Setup Java
       uses: actions/setup-java@v5
