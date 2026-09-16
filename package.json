@@ -19,7 +19,7 @@
     "@capacitor/push-notifications": "5.1.0",
     "@capacitor/filesystem": "5.2.1",
     "@capawesome-team/capacitor-file-opener": "5.0.4",
-    "@capgo/capacitor-native-biometric": "5.0.2",
+    "@capgo/capacitor-native-biometric": "5.1.1",
     "@capacitor-firebase/analytics": "5.4.1",
     "@capacitor-firebase/crashlytics": "5.4.1"
   },
