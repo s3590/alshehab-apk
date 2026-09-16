@@ -2,224 +2,409 @@ name: Build and Release Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
+
+# يمنع إصدارين متزامنين من الكتابة فوق Release باسم latest.
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  APP_ID: com.alshehab.pro
+  APP_NAME: الشهاب pro
+  WEB_APP_URL: https://my-bot-ehio.onrender.com
+  RELEASE_APK_NAME: Alshehab-Pro.apk
 
 jobs:
   build:
+    name: Build, sign and publish Android APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 30
 
     steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-    - name: 🟢 Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
 
-    - name: ☕ Setup Java
-      uses: actions/setup-java@v5
-      with:
-        distribution: 'zulu'
-        java-version: '17'
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-    - name: 📦 Install Dependencies
-      run: |
-        npm install --legacy-peer-deps
-        npm install @capacitor/assets -D --legacy-peer-deps
-        npm install @capgo/capacitor-native-biometric@5 @capacitor/app@5 @capacitor/splash-screen@5 @capacitor/push-notifications@5 @capacitor-firebase/analytics@5 @capacitor-firebase/crashlytics@5 @capacitor/filesystem@5 @capawesome-team/capacitor-file-opener@5 --legacy-peer-deps
+      - name: Install Dependencies
+        run: |
+          npm install --legacy-peer-deps
 
-    - name: ⚙️ Prepare Config & Web Assets (Robust Offline)
-      run: |
-        mkdir -p www/static
-        
-        CURL_OPTS="--fail --show-error --location --retry 5 --retry-delay 2"
-        curl $CURL_OPTS -o www/index.html https://my-bot-ehio.onrender.com/
-        curl $CURL_OPTS -o www/firebase-messaging-sw.js https://my-bot-ehio.onrender.com/firebase-messaging-sw.js
-        curl $CURL_OPTS -o www/static/localforage.min.js https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js
-        curl $CURL_OPTS -o www/static/logo.png https://my-bot-ehio.onrender.com/static/logo.png
-        curl $CURL_OPTS -o www/static/manifest.json https://my-bot-ehio.onrender.com/static/manifest.json
-        
-        sed -i "s/APP_VERSION_PLACEHOLDER/${{ github.run_number }}/g" www/index.html
-        
-        rm -f capacitor.config.ts capacitor.config.js
-        
-        cat <<EOF > capacitor.config.json
-        {
-          "appId": "com.alshehab.pro",
-          "appName": "الشهاب pro",
-          "webDir": "www",
-          "plugins": {
-            "CapacitorHttp": { "enabled": true },
-            "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
-            "SplashScreen": {
-              "launchShowDuration": 3000,
-              "launchAutoHide": true,
-              "backgroundColor": "#050b14",
-              "androidSplashResourceName": "splash",
-              "androidScaleType": "CENTER_CROP"
+      - name: Validate required Capacitor packages
+        run: |
+          set -Eeuo pipefail
+          node -e "const p=require('./package.json'); const d={...(p.dependencies||{}), ...(p.devDependencies||{})}; for (const x of ['@capacitor/core','@capacitor/cli','@capacitor/android']) { if (!d[x]) { console.error('❌ Missing dependency: '+x); process.exit(1); } }"
+
+      - name: Build web application
+        run: |
+          set -Eeuo pipefail
+          if npm run | grep -qE '^  build'; then
+            npm run build
+          else
+            echo 'ℹ️ لا يوجد script باسم build؛ سيتم استخدام ملفات www الموجودة مسبقًا.'
+          fi
+
+      - name: Prepare and validate web assets
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p www/static
+
+          # إذا لم ينتج المشروع www محليًا، يتم استخدام النسخة المنشورة كخطة احتياطية.
+          if [ ! -s www/index.html ]; then
+            echo '⚠️ www/index.html غير موجود؛ يتم تنزيل الواجهة من الخادم المنشور.'
+            CURL_OPTS=(
+              --fail
+              --show-error
+              --location
+              --retry 5
+              --retry-delay 2
+              --connect-timeout 15
+              --max-time 120
+            )
+
+            curl "${CURL_OPTS[@]}" -o www/index.html "$WEB_APP_URL/"
+            curl "${CURL_OPTS[@]}" -o www/firebase-messaging-sw.js "$WEB_APP_URL/firebase-messaging-sw.js"
+            curl "${CURL_OPTS[@]}" -o www/static/localforage.min.js 'https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js'
+            curl "${CURL_OPTS[@]}" -o www/static/logo.png "$WEB_APP_URL/static/logo.png"
+            curl "${CURL_OPTS[@]}" -o www/static/manifest.json "$WEB_APP_URL/static/manifest.json"
+          fi
+
+          test -s www/index.html || { echo '❌ www/index.html فارغ أو غير موجود'; exit 1; }
+          grep -qi '<html' www/index.html || { echo '❌ الملف الذي تم تنزيله ليس HTML صالحًا'; exit 1; }
+          test -s www/static/logo.png || { echo '❌ www/static/logo.png فارغ أو غير موجود'; exit 1; }
+
+          # استبدال placeholder فقط إن كان موجودًا، دون كسر الملف إذا لم يوجد.
+          sed -i "s/APP_VERSION_PLACEHOLDER/${RUN_NUMBER}/g" www/index.html
+
+      - name: Write Capacitor configuration
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -Eeuo pipefail
+          rm -f capacitor.config.ts capacitor.config.js capacitor.config.json
+
+          cat > capacitor.config.json <<EOF
+          {
+            "appId": "${APP_ID}",
+            "appName": "${APP_NAME}",
+            "webDir": "www",
+            "plugins": {
+              "CapacitorHttp": {
+                "enabled": true
+              },
+              "PushNotifications": {
+                "presentationOptions": ["badge", "sound", "alert"]
+              },
+              "SplashScreen": {
+                "launchShowDuration": 3000,
+                "launchAutoHide": true,
+                "backgroundColor": "#050b14",
+                "androidSplashResourceName": "splash",
+                "androidScaleType": "CENTER_CROP"
+              }
+            },
+            "android": {
+              "appendUserAgent": "AlshehabAPK/${RUN_NUMBER}"
             }
-          },
-          "android": { "appendUserAgent": "AlshehabAPK/${{ github.run_number }}" }
-        }
-        EOF
+          }
+          EOF
 
-    - name: 🤖 Add Android Platform
-      run: |
-        npx cap add android
-        npx cap sync android
+      - name: Add Android platform and sync Capacitor
+        run: |
+          set -Eeuo pipefail
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
 
-    - name: 🎨 Generate App Icons
-      run: |
-        mkdir -p assets
-        cp www/static/logo.png assets/icon.png
-        cp www/static/logo.png assets/splash.png
-        npx capacitor-assets generate --android
+      - name: Generate Android icons and splash screen
+        run: |
+          set -Eeuo pipefail
+          mkdir -p assets
+          cp www/static/logo.png assets/icon.png
+          cp www/static/logo.png assets/splash.png
+          npx capacitor-assets generate --android
 
-    - name: 🎵 Add Custom Sound (Optional )
-      run: |
-        mkdir -p android/app/src/main/res/raw
-        if [ -f "bell.mp3" ]; then
-          cp bell.mp3 android/app/src/main/res/raw/bell.mp3
-          echo "✅ Custom sound added."
-        else
-          echo "⚠️ bell.mp3 not found, skipping..."
-        fi
+      - name: Add optional custom notification sound
+        run: |
+          set -Eeuo pipefail
+          mkdir -p android/app/src/main/res/raw
+          if [ -f bell.mp3 ]; then
+            cp bell.mp3 android/app/src/main/res/raw/bell.mp3
+            echo '✅ تمت إضافة bell.mp3.'
+          else
+            echo 'ℹ️ bell.mp3 غير موجود؛ سيتم استخدام الصوت الافتراضي.'
+          fi
 
-    - name: 🚀 Inject App Shortcuts XML
-      run: |
-        mkdir -p android/app/src/main/res/xml
-        mkdir -p android/app/src/main/res/drawable
-        mkdir -p android/app/src/main/res/values
+      - name: Create Android app shortcuts resources
+        run: |
+          set -Eeuo pipefail
+          mkdir -p android/app/src/main/res/xml
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/values
 
-        cat <<EOF > android/app/src/main/res/values/shortcut_strings.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <resources>
-            <string name="shortcut_telecom_short">التسديدات</string>
-            <string name="shortcut_telecom_long">فتح قسم التسديدات</string>
-            <string name="shortcut_pos_short">نقطة البيع</string>
-            <string name="shortcut_pos_long">فتح نقطة البيع السريعة</string>
-        </resources>
-        EOF
+          cat > android/app/src/main/res/values/shortcut_strings.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="shortcut_telecom_short">التسديدات</string>
+              <string name="shortcut_telecom_long">فتح قسم التسديدات</string>
+              <string name="shortcut_pos_short">نقطة البيع</string>
+              <string name="shortcut_pos_long">فتح نقطة البيع السريعة</string>
+          </resources>
+          EOF
 
-        cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_telecom.xml
-        <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-            <path android:fillColor="#00d2ff" android:pathData="M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z"/>
-        </vector>
-        EOF
+          cat > android/app/src/main/res/drawable/ic_shortcut_telecom.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#00d2ff" android:pathData="M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z" />
+          </vector>
+          EOF
 
-        cat <<EOF > android/app/src/main/res/drawable/ic_shortcut_pos.xml
-        <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-            <path android:fillColor="#38ef7d" android:pathData="M7,18c-1.1,0 -1.99,0.9 -1.99,2S5.9,22 7,22s2,-0.9 2,-2S8.1,18 7,18zM17,18c-1.1,0 -1.99,0.9 -1.99,2s0.89,2 1.99,2s2,-0.9 2,-2S18.1,18 17,18zM7.17,14.75l0.03,-0.12 1.68,-3.06h7.45c0.75,0 1.41,-0.41 1.75,-1.03l3.58,-6.49c0.08,-0.14 0.12,-0.31 0.12,-0.48 0,-0.55 -0.45,-1 -1,-1H5.21l-0.94,-2H1v2h2l3.6,7.59 -1.35,2.44C4.52,15.37 5.48,17 7,17h12v-2H7l0.17,-0.25z"/>
-        </vector>
-        EOF
+          cat > android/app/src/main/res/drawable/ic_shortcut_pos.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#38ef7d" android:pathData="M7,18c-1.1,0 -1.99,0.9 -1.99,2S5.9,22 7,22s2,-0.9 2,-2S8.1,18 7,18zM17,18c-1.1,0 -1.99,0.9 -1.99,2s0.89,2 1.99,2s2,-0.9 2,-2S18.1,18 17,18zM7.17,14.75l0.03,-0.12 1.68,-3.06h7.45c0.75,0 1.41,-0.41 1.75,-1.03l3.58,-6.49c0.08,-0.14 0.12,-0.31 0.12,-0.48 0,-0.55 -0.45,-1 -1,-1H5.21l-0.94,-2H1v2h2l3.6,7.59 -1.35,2.44C4.52,15.37 5.48,17 7,17h12v-2H7l0.17,-0.25z" />
+          </vector>
+          EOF
 
-        cat <<EOF > android/app/src/main/res/xml/shortcuts.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-            <shortcut android:shortcutId="telecom" android:enabled="true" android:icon="@drawable/ic_shortcut_telecom" android:shortcutShortLabel="@string/shortcut_telecom_short" android:shortcutLongLabel="@string/shortcut_telecom_long">
-                <intent android:action="android.intent.action.VIEW" android:data="https://my-bot-ehio.onrender.com?action=telecom" />
-            </shortcut>
-            <shortcut android:shortcutId="pos" android:enabled="true" android:icon="@drawable/ic_shortcut_pos" android:shortcutShortLabel="@string/shortcut_pos_short" android:shortcutLongLabel="@string/shortcut_pos_long">
-                <intent android:action="android.intent.action.VIEW" android:data="https://my-bot-ehio.onrender.com?action=pos" />
-            </shortcut>
-        </shortcuts>
-        EOF
+          cat > android/app/src/main/res/xml/shortcuts.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+              <shortcut
+                  android:shortcutId="telecom"
+                  android:enabled="true"
+                  android:icon="@drawable/ic_shortcut_telecom"
+                  android:shortcutShortLabel="@string/shortcut_telecom_short"
+                  android:shortcutLongLabel="@string/shortcut_telecom_long">
+                  <intent
+                      android:action="android.intent.action.VIEW"
+                      android:data="https://my-bot-ehio.onrender.com?action=telecom" />
+              </shortcut>
+              <shortcut
+                  android:shortcutId="pos"
+                  android:enabled="true"
+                  android:icon="@drawable/ic_shortcut_pos"
+                  android:shortcutShortLabel="@string/shortcut_pos_short"
+                  android:shortcutLongLabel="@string/shortcut_pos_long">
+                  <intent
+                      android:action="android.intent.action.VIEW"
+                      android:data="https://my-bot-ehio.onrender.com?action=pos" />
+              </shortcut>
+          </shortcuts>
+          EOF
 
-    - name: 📝 Create google-services.json from Secret
-      env:
-        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-      run: |
-        if [ -z "$GOOGLE_SERVICES_JSON" ]; then
-          echo "❌ خطأ: لم يتم العثور على سر GOOGLE_SERVICES_JSON في GitHub Secrets!"
-          exit 1
-        fi
-        echo "$GOOGLE_SERVICES_JSON" > google-services.json
-        echo "✅ تم إنشاء ملف google-services.json بنجاح."
+      - name: Create Firebase configuration from GitHub Secret
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$GOOGLE_SERVICES_JSON" || {
+            echo '❌ السر GOOGLE_SERVICES_JSON غير موجود.'
+            exit 1
+          }
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          test -s android/app/google-services.json
 
-    - name: 🔥 Inject Permissions, Deep Links & Firebase
-      run: |
-        if [ -f google-services.json ]; then
-          cp google-services.json android/app/
-          sed -i '/dependencies {/a \        classpath "com.google.gms:google-services:4.3.15"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:2.9.9"' android/build.gradle || true
-          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
-          echo "apply plugin: 'com.google.firebase.crashlytics'" >> android/app/build.gradle
-        fi
-        
-        sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle
-        sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/g' android/app/build.gradle
-        sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/g' android/app/build.gradle
-        
-        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
-        
-        sed -i '0,/<\/activity>/s/<\/activity>/            <meta-data android:name="android.app.shortcuts" android:resource="@xml\/shortcuts" \/>\n            <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" \/>\n            <\/intent-filter>\n        <\/activity>/' android/app/src/main/AndroidManifest.xml
+      - name: Configure Firebase Gradle plugins
+        run: |
+          set -Eeuo pipefail
+          test -f android/build.gradle || {
+            echo '❌ android/build.gradle غير موجود.'
+            exit 1
+          }
+          test -f android/app/build.gradle || {
+            echo '❌ android/app/build.gradle غير موجود.'
+            exit 1
+          }
 
-    - name: 🏗️ Build Release APK
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleRelease
+          # Capacitor 5 يستخدم buildscript dependencies في ملف Gradle الرئيسي.
+          if ! grep -q 'com.google.gms:google-services' android/build.gradle; then
+            sed -i '/dependencies[[:space:]]*{/a\        classpath "com.google.gms:google-services:4.4.2"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:3.0.2"' android/build.gradle
+          fi
 
-    - name: 🔐 Sign APK Manually
-      env:
-        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: |
-        echo "${KEYSTORE_BASE64}" | base64 -d > release.keystore
-        BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1 )
-        ZIPALIGN=$BUILD_TOOLS_DIR/zipalign
-        APKSIGNER=$BUILD_TOOLS_DIR/apksigner
-        APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-        ALIGNED_APK="app-aligned.apk"
-        SIGNED_APK="Alshehab-Pro.apk"
-        $ZIPALIGN -v -p 4 $APK_PATH $ALIGNED_APK
-        $APKSIGNER sign --ks release.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out $SIGNED_APK $ALIGNED_APK
-        
-        # 👇 هذا هو السطر السحري الذي سيطبع البصمة في السجلات 👇
-        $APKSIGNER verify --print-certs $SIGNED_APK
+          if ! grep -q "com.google.gms.google-services" android/app/build.gradle; then
+            printf '\napply plugin: "com.google.gms.google-services"\n' >> android/app/build.gradle
+          fi
+          if ! grep -q "com.google.firebase.crashlytics" android/app/build.gradle; then
+            printf 'apply plugin: "com.google.firebase.crashlytics"\n' >> android/app/build.gradle
+          fi
 
-    - name: 📤 Upload APK Artifact (Backup)
-      uses: actions/upload-artifact@v4
-      with:
-        name: Alshehab-Pro-APK
-        path: Alshehab-Pro.apk
+      - name: Configure Android version and manifest
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -Eeuo pipefail
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          test -f "$MANIFEST"
 
-    - name: 🚀 Publish to GitHub Releases
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: latest
-        target_commitish: ${{ github.sha }}
-        name: "الشهاب Pro - أحدث إصدار 🚀"
-        body: "قم بتحميل أحدث نسخة رسمية وموقعة من تطبيق الشهاب Pro. (جاهز للتثبيت على جميع الهواتف)"
-        files: Alshehab-Pro.apk
-        make_latest: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # نمرر الإصدار إلى Gradle، مع تحديث القيم القديمة إن كانت موجودة.
+          if [ -f android/app/build.gradle ]; then
+            sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${RUN_NUMBER}/g" android/app/build.gradle || true
+            sed -i -E "s/versionName[[:space:]]+\"[^"]+\"/versionName \"1.0.${RUN_NUMBER}\"/g" android/app/build.gradle || true
+          fi
 
-    - name: 📢 Send Telegram Notification
-      env:
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        ADMIN_ID: ${{ secrets.ADMIN_ID }}
-      run: |
-        MESSAGE="✅ *تم بناء تطبيق الشهاب Pro بنجاح!* 🚀%0A%0A📦 *الإصدار:* أحدث نسخة رسمية (Release)%0A🔗 *رابط التحميل المباشر:*%0Ahttps://github.com/${{ github.repository }}/releases/download/latest/Alshehab-Pro.apk"
-        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-          -d chat_id="${ADMIN_ID}" \
-          -d text="${MESSAGE}" \
-          -d parse_mode="Markdown"
+          # INTERNET ضرورية للوصول إلى API والخادم.
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
 
-    - name: 🤖 Auto-Bump App Version on Server
-      env:
-        API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
-      run: |
-        curl -s -X POST "https://my-bot-ehio.onrender.com/api/auto_bump_version?token=${API_SECRET_KEY}&run_number=${{ github.run_number }}"
+          # REQUEST_INSTALL_PACKAGES لا تُضاف تلقائيًا؛ أضفها فقط إذا كان التطبيق يثبت APK فعلًا.
+          # صلاحيات التخزين القديمة لا تُضاف، لأنها غير مناسبة افتراضيًا لإصدارات Android الحديثة.
 
-    - name: 🧹 Clean up Secrets
-      if: always( )
-      run: |
-        rm -f release.keystore google-services.json
-        echo "✅ تم مسح الملفات السرية (Keystore & Firebase) من سيرفر البناء بنجاح لحماية الأمان."
+          # إضافة metadata داخل application وليس داخل activity.
+          if ! grep -q 'android.app.shortcuts' "$MANIFEST"; then
+            sed -i '/<application[^>]*>/a\        <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />' "$MANIFEST"
+          fi
+
+          # إضافة intent-filter إلى MainActivity فقط إن لم يكن موجودًا.
+          if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
+            sed -i '/<activity[^>]*MainActivity[^>]*>/a\        <intent-filter android:autoVerify="true">\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n        </intent-filter>' "$MANIFEST"
+          fi
+
+      - name: Validate Android configuration
+        run: |
+          set -Eeuo pipefail
+          grep -q 'android.app.shortcuts' android/app/src/main/AndroidManifest.xml
+          grep -q 'my-bot-ehio.onrender.com' android/app/src/main/AndroidManifest.xml
+          test -s android/app/google-services.json
+
+      - name: Build unsigned release APK
+        working-directory: android
+        run: |
+          set -Eeuo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleRelease
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Align, sign and verify release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo '❌ KEYSTORE_BASE64 غير موجود.'; exit 1; }
+          test -n "$KEY_ALIAS" || { echo '❌ KEY_ALIAS غير موجود.'; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo '❌ KEYSTORE_PASSWORD غير موجود.'; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo '❌ KEY_PASSWORD غير موجود.'; exit 1; }
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+          keytool -list \
+            -keystore release.keystore \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" > /dev/null
+
+          BUILD_TOOLS_DIR="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+
+          "$BUILD_TOOLS_DIR/zipalign" -f -p 4 "$APK_PATH" app-aligned.apk
+          "$BUILD_TOOLS_DIR/apksigner" sign \
+            --ks release.keystore \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --out "$RELEASE_APK_NAME" \
+            app-aligned.apk
+
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$RELEASE_APK_NAME"
+          test -s "$RELEASE_APK_NAME"
+          sha256sum "$RELEASE_APK_NAME" | tee "$RELEASE_APK_NAME.sha256"
+
+      - name: Upload APK and checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Alshehab-Pro-APK-${{ github.run_number }}
+          path: |
+            Alshehab-Pro.apk
+            Alshehab-Pro.apk.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: الشهاب Pro - الإصدار 1.0.${{ github.run_number }}
+          body: |
+            إصدار رسمي وموقّع من تطبيق الشهاب Pro.
+
+            - Commit: `${{ github.sha }}`
+            - GitHub run: `${{ github.run_number }}`
+            - SHA-256 checksum مرفق مع الإصدار.
+          files: |
+            Alshehab-Pro.apk
+            Alshehab-Pro.apk.sha256
+          make_latest: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update server application version securely
+        env:
+          API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$API_SECRET_KEY" || {
+            echo '❌ API_SECRET_KEY غير موجود.'
+            exit 1
+          }
+
+          curl --fail --show-error --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            --retry 3 \
+            -X POST \
+            -H "Authorization: Bearer ${API_SECRET_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"run_number\":${RUN_NUMBER},\"version\":\"1.0.${RUN_NUMBER}\"}" \
+            "$WEB_APP_URL/api/auto_bump_version"
+
+      - name: Send Telegram success notification
+        if: ${{ success() }}
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          RUN_NUMBER: ${{ github.run_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$BOT_TOKEN" || { echo '❌ BOT_TOKEN غير موجود.'; exit 1; }
+          test -n "$ADMIN_ID" || { echo '❌ ADMIN_ID غير موجود.'; exit 1; }
+
+          MESSAGE="✅ تم بناء تطبيق الشهاب Pro بنجاح!%0A%0A📦 الإصدار: 1.0.${RUN_NUMBER}%0A🔗 رابط التحميل:%0Ahttps://github.com/${REPOSITORY}/releases/tag/v1.0.${RUN_NUMBER}"
+
+          curl --fail --show-error --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${ADMIN_ID}" \
+            --data-urlencode "text=${MESSAGE}"
+
+      - name: Cleanup sensitive files
+        if: ${{ always() }}
+        run: |
+          rm -f release.keystore
+          rm -f app-aligned.apk
+          rm -f google-services.json
+          rm -f android/app/google-services.json
+          echo '✅ تم تنظيف ملفات التوقيع وFirebase المؤقتة.'
