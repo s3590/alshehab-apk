@@ -1,11 +1,7 @@
 {
   "appId": "com.alshehab.pro",
-  "appName": "الشهاب pro",
+  "appName": "الشهاب Pro",
   "webDir": "www",
-  "server": {
-    "url": "https://my-bot-ehio.onrender.com",
-    "cleartext": true
-  },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
@@ -24,5 +20,8 @@
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP"
     }
+  },
+  "android": {
+    "appendUserAgent": "AlshehabAPK"
   }
 }
