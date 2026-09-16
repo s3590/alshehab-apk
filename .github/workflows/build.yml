@@ -235,7 +235,10 @@ jobs:
 
           # Capacitor 5 يستخدم buildscript dependencies في ملف Gradle الرئيسي.
           if ! grep -q 'com.google.gms:google-services' android/build.gradle; then
-            sed -i '/dependencies[[:space:]]*{/a\        classpath "com.google.gms:google-services:4.4.2"\n        classpath "com.google.firebase:firebase-crashlytics-gradle:3.0.2"' android/build.gradle
+            sed -i '0,/dependencies[[:space:]]*{/s/dependencies[[:space:]]*{/dependencies {\n        classpath "com.google.gms:google-services:4.4.2"/' android/build.gradle
+          fi
+          if ! grep -q 'com.google.firebase:firebase-crashlytics-gradle' android/build.gradle; then
+            sed -i '0,/dependencies[[:space:]]*{/s/dependencies[[:space:]]*{/dependencies {\n        classpath "com.google.firebase:firebase-crashlytics-gradle:3.0.2"/' android/build.gradle
           fi
 
           if ! grep -q "com.google.gms.google-services" android/app/build.gradle; then
