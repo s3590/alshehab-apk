@@ -253,36 +253,48 @@ jobs:
           MANIFEST=android/app/src/main/AndroidManifest.xml
           test -f "$MANIFEST"
 
-          # نمرر الإصدار إلى Gradle، مع تحديث القيم القديمة إن كانت موجودة.
+          # نمرر الإصدار إلى Gradle
           if [ -f android/app/build.gradle ]; then
             sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${RUN_NUMBER}/g" android/app/build.gradle || true
             sed -i -E "s/versionName[[:space:]]+\"[^\"]+\"/versionName \"1.0.${RUN_NUMBER}\"/g" android/app/build.gradle || true
           fi
 
-          # INTERNET ضرورية للوصول إلى API والخادم.
+          # إضافة صلاحية الإنترنت قبل إغلاق manifest
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>|' "$MANIFEST"
           fi
 
-          # REQUEST_INSTALL_PACKAGES لا تُضاف تلقائيًا؛ أضفها فقط إذا كان التطبيق يثبت APK فعلًا.
-          # صلاحيات التخزين القديمة لا تُضاف، لأنها غير مناسبة افتراضيًا لإصدارات Android الحديثة.
-
-          # إضافة metadata داخل application وليس داخل activity.
+          # إضافة metadata للاختصارات قبل إغلاق application
           if ! grep -q 'android.app.shortcuts' "$MANIFEST"; then
-            sed -i '/<application[^>]*>/a\        <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />' "$MANIFEST"
+            sed -i 's|</application>|    <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n    </application>|' "$MANIFEST"
           fi
 
-          # إضافة intent-filter إلى MainActivity فقط إن لم يكن موجودًا.
+          # إضافة intent-filter للرابط قبل إغلاق activity
           if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
-            sed -i '/<activity[^>]*MainActivity[^>]*>/a\        <intent-filter android:autoVerify="true">\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n        </intent-filter>' "$MANIFEST"
+            sed -i 's|</activity>|    <intent-filter android:autoVerify="true">\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n        </intent-filter>\n        </activity>|' "$MANIFEST"
           fi
 
       - name: Validate Android configuration
         run: |
           set -Eeuo pipefail
-          grep -q 'android.app.shortcuts' android/app/src/main/AndroidManifest.xml
-          grep -q 'my-bot-ehio.onrender.com' android/app/src/main/AndroidManifest.xml
-          test -s android/app/google-services.json
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          
+          if ! grep -q 'android.app.shortcuts' "$MANIFEST"; then
+            echo "❌ خطأ: لم يتم العثور على إعدادات shortcuts في Manifest"
+            exit 1
+          fi
+          
+          if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
+            echo "❌ خطأ: لم يتم العثور على إعدادات الرابط (Deep Link ) في Manifest"
+            exit 1
+          fi
+          
+          if [ ! -s android/app/google-services.json ]; then
+            echo "❌ خطأ: ملف google-services.json غير موجود أو فارغ"
+            exit 1
+          fi
+          
+          echo "✅ تم التحقق من جميع الإعدادات بنجاح!"
 
       - name: Build unsigned release APK
         working-directory: android
