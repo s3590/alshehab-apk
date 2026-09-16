@@ -401,10 +401,11 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
-          test -n "$BOT_TOKEN" || { echo '❌ BOT_TOKEN غير موجود.'; exit 1; }
-          test -n "$ADMIN_ID" || { echo '❌ ADMIN_ID غير موجود.'; exit 1; }
-
-          MESSAGE="✅ تم بناء تطبيق الشهاب Pro بنجاح!%0A%0A📦 الإصدار: 1.0.${RUN_NUMBER}%0A🔗 رابط التحميل:%0Ahttps://github.com/${REPOSITORY}/releases/tag/v1.0.${RUN_NUMBER}"
+          MESSAGE="✅ تم بناء تطبيق الشهاب Pro بنجاح!
+          
+          📦 الإصدار: 1.0.${RUN_NUMBER}
+          🔗 رابط التحميل المباشر:
+          https://github.com/${REPOSITORY}/releases/download/v1.0.${RUN_NUMBER}/Alshehab-Pro.apk"
 
           curl --fail --show-error --location \
             --connect-timeout 15 \
