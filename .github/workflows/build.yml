@@ -262,9 +262,9 @@ jobs:
             sed -i -E "s/versionName[[:space:]]+\"[^\"]+\"/versionName \"1.0.${RUN_NUMBER}\"/g" android/app/build.gradle || true
           fi
 
-          # إضافة صلاحية الإنترنت قبل إغلاق manifest
+          # إضافة صلاحية الإنترنت والإشعارات قبل إغلاق manifest
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>|' "$MANIFEST"
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>|' "$MANIFEST"
           fi
 
           # إضافة metadata للاختصارات قبل إغلاق application
