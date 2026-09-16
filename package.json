@@ -2,21 +2,33 @@
   "name": "alshehab-pro",
   "version": "1.0.0",
   "private": true,
+  "description": "تطبيق الشهاب Pro المبني باستخدام Capacitor",
+  "license": "UNLICENSED",
   "scripts": {
     "build": "npx cap sync android",
-    "sync": "npx cap sync android"
+    "sync": "npx cap sync android",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:doctor": "npx cap doctor"
   },
   "dependencies": {
-    "@capacitor/core": "^5.0.0",
-    "@capacitor/android": "^5.0.0",
-    "@capacitor/app": "^5.0.0",
-    "@capacitor/splash-screen": "^5.0.0",
-    "@capacitor/push-notifications": "^5.0.0",
-    "@capacitor/filesystem": "^5.0.0",
-    "@capawesome-team/capacitor-file-opener": "^5.0.0",
-    "@capgo/capacitor-native-biometric": "^5.0.0"
+    "@capacitor/core": "5.7.8",
+    "@capacitor/android": "5.7.8",
+    "@capacitor/app": "5.0.7",
+    "@capacitor/splash-screen": "5.0.7",
+    "@capacitor/push-notifications": "5.1.0",
+    "@capacitor/filesystem": "5.2.1",
+    "@capawesome-team/capacitor-file-opener": "5.0.7",
+    "@capgo/capacitor-native-biometric": "5.0.2",
+    "@capacitor-firebase/analytics": "5.4.1",
+    "@capacitor-firebase/crashlytics": "5.4.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^5.0.0"
+    "@capacitor/cli": "5.7.8",
+    "@capacitor/assets": "3.0.2"
+  },
+  "engines": {
+    "node": ">=20 <23",
+    "npm": ">=10"
   }
 }
