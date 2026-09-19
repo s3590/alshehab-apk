@@ -2399,7 +2399,7 @@ async function checkForUpdates() {
         }
     }
 
-async function executeForceUpdate() {
+    async function executeForceUpdate() {
         let btn = document.querySelector('#force-update-screen button');
         let progressContainer = document.getElementById('update-progress-container');
         let progressBar = document.getElementById('update-progress-bar');
@@ -2414,10 +2414,9 @@ async function executeForceUpdate() {
             });
         }
 
-        // 🌟 الإصلاح 1: تصحيح رابط GitHub لكي يحمل الـ APK الحقيقي بدلاً من صفحة 404
         const apkUrl = "https://github.com/s3590/alshehab-apk/releases/latest/download/Alshehab-Pro.apk";
 
-        if (window.Capacitor && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.FileOpener  ) {
+        if (window.Capacitor && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.FileOpener ) {
             btn.style.display = 'none';
             progressContainer.style.display = 'block';
             
@@ -2433,24 +2432,21 @@ async function executeForceUpdate() {
                     }
                 });
 
+                // 🌟 الإصلاح الجذري: حفظ الملف في DATA بدلاً من CACHE لكي يستطيع مثبت الأندرويد قراءته
                 const response = await Filesystem.downloadFile({
                     url: apkUrl,
                     path: 'Alshehab-Update.apk',
-                    directory: 'CACHE', 
-                    progress: true,
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36",
-                        "Accept": "application/octet-stream"
-                    }
+                    directory: 'DATA', 
+                    progress: true
                 });
                 
                 progressText.innerText = "جاري فتح نافذة التثبيت...";
                 
-                // 🌟 الإصلاح 2: استخدام response.url لضمان وجود صيغة file:// التي يطلبها الأندرويد
                 setTimeout(async () => {
                     try {
+                        // 🌟 الإصلاح: تمرير المسار الصافي فقط
                         await FileOpener.openFile({
-                            path: response.url || response.path, 
+                            path: response.path, 
                             mimeType: 'application/vnd.android.package-archive'
                         });
                     } catch (openErr) {
@@ -2458,7 +2454,7 @@ async function executeForceUpdate() {
                         // طوارئ: إذا فشل الفتح الداخلي، نفتح الرابط في المتصفح
                         window.open(apkUrl, '_system');
                     }
-                }, 500); // تأخير نصف ثانية لضمان حفظ الملف في الذاكرة
+                }, 500);
 
                 setTimeout(() => {
                     btn.style.display = 'block';
@@ -3567,7 +3563,7 @@ ${errorDetails}
 
                 if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                 
-                // 🌟 استخدام النافذة الفخمة بدلاً من confirm المزعجة
+                // ?? استخدام النافذة الفخمة بدلاً من confirm المزعجة
                 let wantsUndo = await smartDialog({
                     type: 'confirm',
                     title: 'هززت الهاتف!',
