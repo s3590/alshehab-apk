@@ -427,18 +427,28 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
+          
+          # 🌟 التحقق من وجود الأسرار قبل الإرسال
+          if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
+            echo "⚠️ تحذير: BOT_TOKEN أو ADMIN_ID غير موجودة في أسرار GitHub (Secrets). لن يتم إرسال الإشعار."
+            exit 0
+          fi
+
           MESSAGE="✅ تم بناء تطبيق الشهاب Pro بنجاح!
           
           📦 الإصدار: 1.0.${RUN_NUMBER}
           🔗 رابط التحميل المباشر:
           https://github.com/${REPOSITORY}/releases/download/v1.0.${RUN_NUMBER}/Alshehab-Pro.apk"
 
-          curl --fail --show-error --location \
+          echo "جاري إرسال الإشعار إلى تليجرام..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --location \
             --connect-timeout 15 \
             --max-time 60 \
             -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${ADMIN_ID}" \
-            --data-urlencode "text=${MESSAGE}"
+            --data-urlencode "text=${MESSAGE}" )
+          
+          echo "رد تليجرام: $RESPONSE"
 
       - name: Cleanup sensitive files
         if: ${{ always() }}
