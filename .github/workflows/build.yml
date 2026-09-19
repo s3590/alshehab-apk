@@ -290,10 +290,10 @@ jobs:
 
           # إضافة intent-filter للرابط قبل إغلاق أول activity (MainActivity) فقط لمنع تكرار الكود
           if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
-            sed -i '0,|</activity>|s|</activity>|    <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="alshehab" android:host="app" />\n            </intent-filter>\n        </activity>|' "$MANIFEST"
+            sed -i '0,/<\/activity>/s|</activity>|    <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="alshehab" android:host="app" />\n            </intent-filter>\n        </activity>|' "$MANIFEST"
           fi
           
-          # 🌟 السطر المنقذ: إجبار التطبيق على الفتح في نفس النافذة (singleTask ) لمنع تكرار الشاشات عند الضغط على إشعار
+          # 🌟 السطر المنقذ: إجبار التطبيق على الفتح في نفس النافذة (singleTask  ) لمنع تكرار الشاشات عند الضغط على إشعار
           sed -i 's/android:launchMode="[^"]*"/android:launchMode="singleTask"/g' "$MANIFEST"
 
       - name: Validate Android configuration
