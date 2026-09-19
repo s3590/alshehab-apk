@@ -94,6 +94,15 @@ jobs:
           # استبدال placeholder فقط إن كان موجودًا، دون كسر الملف إذا لم يوجد.
           sed -i "s/APP_VERSION_PLACEHOLDER/${RUN_NUMBER}/g" www/index.html
 
+      - name: Create OTA update zip
+        run: |
+          set -Eeuo pipefail
+          cd www
+          zip -r ../update.zip .
+          cd ..
+          test -s update.zip
+          echo '✅ تم إنشاء ملف التحديث الهوائي update.zip بنجاح.'
+
       - name: Write Capacitor configuration
         env:
           RUN_NUMBER: ${{ github.run_number }}
@@ -119,6 +128,9 @@ jobs:
                 "backgroundColor": "#050b14",
                 "androidSplashResourceName": "splash",
                 "androidScaleType": "CENTER_CROP"
+              },
+              "CapacitorUpdater": {
+                "autoUpdate": false
               }
             },
             "android": {
@@ -271,23 +283,18 @@ jobs:
             sed -i 's|</manifest>|    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>|' "$MANIFEST"
           fi
 
-          if ! grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' "$MANIFEST"; then
-            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>|' "$MANIFEST"
-          fi
-
-          if ! grep -q 'android.permission.READ_EXTERNAL_STORAGE' "$MANIFEST"; then
-            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n</manifest>|' "$MANIFEST"
-          fi
-
           # إضافة metadata للاختصارات قبل إغلاق application
           if ! grep -q 'android.app.shortcuts' "$MANIFEST"; then
             sed -i 's|</application>|    <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n    </application>|' "$MANIFEST"
           fi
 
-          # إضافة intent-filter للرابط قبل إغلاق activity
+          # إضافة intent-filter للرابط قبل إغلاق أول activity (MainActivity) فقط لمنع تكرار الكود
           if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
-            sed -i 's|</activity>|    <intent-filter android:autoVerify="true">\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n        </intent-filter>\n        </activity>|' "$MANIFEST"
+            sed -i '0,|</activity>|s|</activity>|    <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="alshehab" android:host="app" />\n            </intent-filter>\n        </activity>|' "$MANIFEST"
           fi
+          
+          # 🌟 السطر المنقذ: إجبار التطبيق على الفتح في نفس النافذة (singleTask ) لمنع تكرار الشاشات عند الضغط على إشعار
+          sed -i 's/android:launchMode="[^"]*"/android:launchMode="singleTask"/g' "$MANIFEST"
 
       - name: Validate Android configuration
         run: |
@@ -361,6 +368,7 @@ jobs:
           path: |
             Alshehab-Pro.apk
             Alshehab-Pro.apk.sha256
+            update.zip
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -375,9 +383,11 @@ jobs:
             - Commit: `${{ github.sha }}`
             - GitHub run: `${{ github.run_number }}`
             - SHA-256 checksum مرفق مع الإصدار.
+            - يتضمن ملف التحديث الهوائي (update.zip).
           files: |
             Alshehab-Pro.apk
             Alshehab-Pro.apk.sha256
+            update.zip
           make_latest: true
           fail_on_unmatched_files: true
         env:
