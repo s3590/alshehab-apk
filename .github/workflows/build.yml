@@ -117,7 +117,7 @@ jobs:
             "webDir": "www",
             "plugins": {
               "CapacitorHttp": {
-                "enabled": true
+                "enabled": false
               },
               "PushNotifications": {
                 "presentationOptions": ["badge", "sound", "alert"]
