@@ -40,21 +40,21 @@ const messaging = firebase.messaging();
 /* 2. Static assets                                                             */
 /* -------------------------------------------------------------------------- */
 
-const APP_ORIGIN = new URL(SERVER_URL).origin;
-const LOGO_URL = `${SERVER_URL}/static/logo.png`;
-const APP_SHELL_URL = `${SERVER_URL}/`;
-
 const CORE_ASSETS = [
-  APP_SHELL_URL,
-  `${SERVER_URL}/static/manifest.json`,
-  LOGO_URL,
-  `${SERVER_URL}/static/localforage.min.js`,
-  // 👇 أضف أسماء صور الكروت هنا ليتم تحميلها وحفظها للأوفلاين تلقائياً 👇
-  `${SERVER_URL}/static/100.png`,
-  `${SERVER_URL}/static/250.png`,
-  `${SERVER_URL}/static/500.png`,
-  `${SERVER_URL}/static/1000.png`,
-  // (يمكنك إضافة أي فئات أخرى تملكها بنفس الطريقة)
+  '/',
+  '/static/manifest.json',
+  '/static/logo.png',
+  '/static/localforage.min.js',
+  '/static/100.png',
+  '/static/250.png',
+  '/static/500.png',
+  '/static/1000.png',
+  '/static/3000.png',
+  '/static/yemen_mobile.png',
+  '/static/you.png',
+  '/static/sabafon.png',
+  '/static/y.png',
+  '/static/adsl.png',
   `https://www.gstatic.com/firebasejs/${FCM_SDK_VERSION}/firebase-app.js`,
   `https://www.gstatic.com/firebasejs/${FCM_SDK_VERSION}/firebase-messaging.js`
 ];
