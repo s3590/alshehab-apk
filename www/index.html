@@ -2305,12 +2305,10 @@ if ('serviceWorker' in navigator) {
         }
     });
 
-    // عندما يتغير عامل الخدمة (يتم التحديث)، قم بإعادة تحميل الصفحة مرة واحدة فقط
-    let refreshing = false;
+    // 🌟 الإصلاح الجذري: تم إيقاف إعادة التحميل التلقائي لمنع الدوران اللانهائي داخل الـ APK
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        window.location.replace(window.location.origin + "/?v=" + new Date().getTime());
+        console.log("Service Worker Updated!");
+        // لن نقوم بعمل window.location.replace هنا أبداً
     });
 }
 
@@ -3276,10 +3274,8 @@ ${errorDetails}
             } else {
                 document.getElementById('lock-title').innerText = "أدخل كلمة المرور";
                 
-                // 🌟 السحر هنا: انبثاق البصمة تلقائياً إذا كانت مفعلة 🌟
-                if (isBiometricEnabled) {
-                    setTimeout(() => realBiometric(true), 400); // تأخير بسيط لكي تظهر الشاشة أولاً
-                }
+                // 🌟 الإصلاح الأمني: إيقاف الانبثاق التلقائي للبصمة لمنع انهيار بعض هواتف الأندرويد
+                // العميل سيضغط على زر البصمة بنفسه عندما يكون جاهزاً
             }
         }
     }
