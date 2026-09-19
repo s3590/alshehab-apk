@@ -2579,8 +2579,9 @@ async function executeForceUpdate() {
     }
 
     // 2. تعريف المتغيرات
-    const MANAGER_ID = parseInt("MANAGER_ID_PLACEHOLDER") || 0; 
-    const ADMIN_ID = parseInt("ADMIN_ID_PLACEHOLDER") || 0;   
+    // 🌟 الحل الجذري: وضعنا الأرقام الحقيقية مباشرة لكي لا نعتمد على سيرفر البناء
+    const MANAGER_ID = 1840219869; // 👈 امسح هذا الرقم وضع آيدي المدير العام (الشيخ رهيب)
+    const ADMIN_ID = 1602450100;   // 👈 امسح هذا الرقم وضع آيدي الوكيل (وليد)
 
     let user = tg.initDataUnsafe?.user;
     let savedId = localStorage.getItem('saved_user_id');
