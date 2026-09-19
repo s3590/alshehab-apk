@@ -5849,7 +5849,8 @@ ${summary}    هل أنت متأكد من إرسالها للوكيل؟`,
                 
                 if (res.status === 401) {
                     clearTimeout(timeoutId);
-                    if(typeof logout === 'function') logout();
+                    // 🌟 الإصلاح: لا تعمل تسجيل خروج إلا إذا كان المستخدم مسجل دخول فعلاً
+                    if(typeof userId !== 'undefined' && userId > 0 && typeof logout === 'function') logout();
                     return { status: 'error', message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.' };
                 }
             }
@@ -5908,7 +5909,8 @@ ${summary}    هل أنت متأكد من إرسالها للوكيل؟`,
                 
                 if (res.status === 401) {
                     clearTimeout(timeoutId);
-                    if (typeof logout === 'function') logout();
+                    // 🌟 الإصلاح: لا تعمل تسجيل خروج إلا إذا كان المستخدم مسجل دخول فعلاً
+                    if (typeof userId !== 'undefined' && userId > 0 && typeof logout === 'function') logout();
                     throw new Error("انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.");
                 }
             }
@@ -7266,6 +7268,11 @@ async function fetchClientPermission(clientId) {
     }
     
     async function logout() {      
+        // 🌟 الإصلاح الجذري: منع الدوران اللانهائي إذا كان المستخدم زائر أصلاً
+        if ((typeof userId === 'undefined' || userId === 0) && !localStorage.getItem('auth_token')) {
+            return;
+        }
+
         // 1. إخبار السيرفر بمسح الكوكي المحمي
         try {
             await fetch(SERVER_URL + '/api/logout', { method: 'POST' });
