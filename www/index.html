@@ -63,8 +63,8 @@
                 if (event.target && (event.target.tagName === 'IMG' || event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
                     let resourceUrl = event.target.src || event.target.href;
                     
-                    // 🌟 3. تجاهل أخطاء الصور المتكررة لمنع الإزعاج
-                    if (resourceUrl && (resourceUrl.includes('logo.png') || resourceUrl.includes('.png'))) return;
+                    // 🌟 3. تجاهل أخطاء الصور المتكررة والمكتبات الخارجية لمنع الإزعاج
+                    if (resourceUrl && (resourceUrl.includes('logo.png') || resourceUrl.includes('.png') || resourceUrl.includes('unpkg.com'))) return;
                     
                     let errDetails = `فشل تحميل الملف: ${resourceUrl}\nنوع الملف: ${event.target.tagName}`;
                     sendToTelegram("فشل تحميل مورد (Resource)", errDetails);
@@ -3652,10 +3652,11 @@ ${errorDetails}
 
     // ================= محرك الإقلاع الصاروخي والمضاد للتعليق =================
     function forceHideSplash() {
+        // 1. إخفاء شاشة HTML الزرقاء
         let splash = document.getElementById('splash-screen');
         if (splash && splash.style.display !== 'none') {
             splash.style.opacity = '0';
-            splash.style.pointerEvents = 'none'; // 👈 يمنع الشعار من حظر لمس الشاشة حتى لو علق
+            splash.style.pointerEvents = 'none'; // يمنع الشعار من حظر لمس الشاشة
             setTimeout(() => { 
                 splash.style.display = 'none'; 
                 if(!localStorage.getItem('onboarding_done') && typeof userId !== 'undefined' && userId > 0) { 
@@ -3663,20 +3664,21 @@ ${errorDetails}
                 }
             }, 300);
         }
+        
+        // 2. إخفاء شاشة إقلاع الأندرويد الأصلية (Capacitor)
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+            window.Capacitor.Plugins.SplashScreen.hide();
+        }
     }
 
-    window.addEventListener('load', () => {
-        setTimeout(forceHideSplash, navigator.onLine ? 600 : 0);
-    });
-
+    // 🌟 صمام الأمان الثلاثي لضمان اختفاء الشاشة 100% 🌟
+    window.addEventListener('load', forceHideSplash); // المحاولة الأولى
+    
     document.addEventListener('DOMContentLoaded', async function() {
+        setTimeout(forceHideSplash, 500); // المحاولة الثانية (بعد نصف ثانية)
         
-        // 🌟 الإصلاح الجذري: إخفاء شاشة الإقلاع فوراً قبل أي فحص أمني لمنع التعليق 🌟
-        if (window.Capacitor && window.Capacitor.Plugins.SplashScreen) {
-            setTimeout(() => {
-                window.Capacitor.Plugins.SplashScreen.hide();
-            }, 500);
-        }
+        // 🚨 المحاولة الثالثة (الضربة القاضية): إخفاء إجباري بعد ثانيتين مهما كانت حالة السيرفر
+        setTimeout(forceHideSplash, 2000);
 
         // 🌟 الجدار الأمني للتحديث: إذا كنا في وضع التحديث، نوقف كل شيء آخر!
         if (localStorage.getItem('is_force_updating') === 'true') {
@@ -3685,7 +3687,7 @@ ${errorDetails}
             checkForUpdates(); // فحص أخير للتأكد من نجاح التحديث
             return; // 🛑 إيقاف تشغيل باقي التطبيق تماماً
         }
-        
+
         // 👇👇 السطر السحري الذي نسيناه: إجبار التطبيق على فحص التحديثات عند كل دخول 👇👇
         checkForUpdates();
         // 👆👆 ================================================================== 👆👆
@@ -6536,7 +6538,7 @@ async function fetchClientPermission(clientId) {
             if(data.role === 'client') {
                 applyRoleTheme('client');
 
-                // 🌟 إخفاء أقسام التسديدات مؤقتاً وترتيب الشاشة 🌟
+                // ?? إخفاء أقسام التسديدات مؤقتاً وترتيب الشاشة 🌟
                 let showTelecom = (userId === ADMIN_ID || userId === 999999);
                 
                 let telecomDebtBox = document.getElementById('telecom-debt-box');
