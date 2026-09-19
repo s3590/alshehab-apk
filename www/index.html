@@ -3275,8 +3275,10 @@ ${errorDetails}
             } else {
                 document.getElementById('lock-title').innerText = "أدخل كلمة المرور";
                 
-                // 🌟 الإصلاح الأمني: إيقاف الانبثاق التلقائي للبصمة لمنع انهيار بعض هواتف الأندرويد
-                // العميل سيضغط على زر البصمة بنفسه عندما يكون جاهزاً
+                // 🌟 إعادة تفعيل الانبثاق التلقائي للبصمة 🌟
+                if (isBiometricEnabled) {
+                    setTimeout(() => realBiometric(true), 500); // تأخير نصف ثانية لضمان استقرار الشاشة أولاً
+                }
             }
         }
     }
@@ -3440,7 +3442,7 @@ ${errorDetails}
         return `
         <div class="card-box" onclick="${onClickAction}" style="border: 1px solid ${borderColor}; box-shadow: inset 0 0 15px ${borderColor}20;">
             ${badgeHtml}
-            <img src="${SERVER_URL}/static/${imgName}.png" class="card-img" loading="lazy" onerror="this.src='${SERVER_URL}/static/logo.png'">
+            <img src="/static/${imgName}.png" class="card-img" loading="lazy" onerror="this.src='/static/logo.png'">
             <div class="card-title">${item.card_type}</div>
             <div class="card-qty">متوفر: ${item.quantity}</div>
         </div>`;
@@ -4448,12 +4450,7 @@ async function orderNetworkCards() {
             let cardsList = physicalCards.map(i => {
                 let match = i.card_type.match(/\d+/); 
                 let imgName = match ? match[0] : 'logo';
-                return { 
-                    value: i.card_type, 
-                    text: i.card_type, 
-                    img: `${SERVER_URL}/static/${imgName}.png`
- 
-                };
+                return { value: i.card_type, text: i.card_type, img: `/static/${imgName}.png` };
             });
             
             let cart = [];
@@ -8443,8 +8440,7 @@ async function switchScreen(screenId) {
 
             let cardsList = filteredInventory.map(i => {
                 let match = i.card_type.match(/\d+/); let imgName = match ? match[0] : 'logo';
-                return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png`
- };
+                return { value: i.card_type, text: i.card_type, img: `/static/${imgName}.png` };
             });
 
             await smartDialog({ 
@@ -9619,7 +9615,7 @@ async function giveCardsToClient() {
             let cardsList = physicalCards.map(i => {
                 let match = i.card_type.match(/\d+/);
                 let imgName = match ? match[0] : 'logo';
-                return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
+                return { value: i.card_type, text: i.card_type, img: `/static/${imgName}.png` };
             });
 
             let manualCart = {};
