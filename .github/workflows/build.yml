@@ -63,6 +63,8 @@ jobs:
       - name: Prepare and validate web assets
         env:
           RUN_NUMBER: ${{ github.run_number }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          NETWORK_OWNER_ID: ${{ secrets.NETWORK_OWNER_ID }}
         run: |
           set -Eeuo pipefail
           mkdir -p www/static
@@ -93,6 +95,8 @@ jobs:
 
           # استبدال placeholder فقط إن كان موجودًا، دون كسر الملف إذا لم يوجد.
           sed -i "s/APP_VERSION_PLACEHOLDER/${RUN_NUMBER}/g" www/index.html
+          sed -i "s/ADMIN_ID_PLACEHOLDER/${ADMIN_ID}/g" www/index.html
+          sed -i "s/MANAGER_ID_PLACEHOLDER/${NETWORK_OWNER_ID}/g" www/index.html
 
       - name: Create OTA update zip
         run: |
