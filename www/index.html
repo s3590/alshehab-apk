@@ -1904,7 +1904,7 @@
     
     <div id="client-promo-banner" style="display: none; margin-bottom: 15px;"></div>
 
-    <!-- الصندوق الأول: المركز المالي -->
+    <!-- الصندوق الأول: المركز المالي وشريط التقدم -->
     <div class="bento-box vip-glow" style="border-color: #00d2ff;">
         <div class="bento-header">
             <span class="bento-title"><i class="fas fa-wallet" style="color:#00d2ff;"></i> المركز المالي</span>
@@ -1914,19 +1914,22 @@
             <p style="color: #ccc; font-size: 11px; margin-bottom: 5px;">إجمالي المديونية المطلوبة</p>
             <h2 id="unified-total-debt" style="color: #ff4757; font-size: 28px; font-weight: 900;">0 <span style="font-size: 14px;">ريال</span></h2>
             <p style="color: #aaa; font-size: 10px;">سقف المديونية: <span id="client-limit">0</span> ريال</p>
-            <span id="client-debt" style="display:none;">0</span> <!-- مخفي برمجياً للحفاظ على عمل الكود القديم -->
+            <span id="client-debt" style="display:none;">0</span>
+            
+            <!-- 🌟 شريط التقدم الملون عاد من جديد 🌟 -->
+            <div class="progress-bg" style="margin-top: 10px; background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
+                <div class="progress-bar" id="debt-progress" style="height: 100%; background: #3cbab2; transition: 0.5s; width: 0%;"></div>
+            </div>
         </div>
         <div style="display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
             <div id="cards-debt-box" style="flex: 1; text-align: center;">
                 <div style="color: #f5af19; font-size: 10px;">دين الكروت</div>
                 <div id="unified-cards-debt" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
             </div>
-            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
             <div id="telecom-debt-box" style="flex: 1; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); display: none;">
                 <div style="color: #00d2ff; font-size: 10px;">سلف التسديدات</div>
                 <div id="unified-telecom-debt" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
             </div>
-            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
             <div id="telecom-balance-box" style="flex: 1; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); display: none;">
                 <div style="color: #38ef7d; font-size: 10px;">رصيد مقدم</div>
                 <div id="unified-telecom-balance" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
@@ -1952,38 +1955,38 @@
         </div>
     </div>
 
-    <!-- الصندوق الثالث: نقطة البيع السريعة (المخزون) -->
+    <!-- 🌟 حاوية البوابات الديناميكية (عادت من جديد لحماية الكاشير) 🌟 -->
+    <h4 style="color: #fff; font-size: 14px; margin-bottom: 12px; font-weight: bold;">حالة الخدمات (بوابات الدخول)</h4>
+    <div id="lobby-buttons-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+        <!-- سيتم حقن البطاقات الفخمة هنا برمجياً (مفعلة أو مقفلة) -->
+    </div>
+</div>
+
+<!-- ================= تطبيق الكروت الورقية (نقطة البيع المستقلة) ================= -->
+<div id="physical-app-container" class="screen-section" style="display: none; padding: 0 15px; padding-bottom: 100px;">
     <div class="bento-box" style="border-color: #f5af19;">
         <div class="bento-header">
-            <span class="bento-title"><i class="fas fa-box-open" style="color:#f5af19;"></i> مخزون الكروت (نقطة البيع)</span>
+            <span class="bento-title"><i class="fas fa-ticket-alt" style="color:#f5af19;"></i> نقطة بيع الكروت الورقية</span>
+            <button onclick="closePhysicalApp()" class="btn-danger" style="padding: 6px 12px; border-radius: 8px; font-size: 12px;"><i class="fas fa-arrow-right"></i> رجوع</button>
         </div>
-        <div class="cards-scroll" id="client-inv-scroll" style="margin-bottom: 10px;"></div>
+        
+        <h4 style="margin-bottom: 10px; font-size: 12px; color: #ccc;">الكروت المتبقية في عهدتك:</h4>
+        <!-- 🌟 هنا ستظهر صور الكروت بشكل سليم 🌟 -->
+        <div class="cards-scroll" id="client-inv-scroll" style="margin-bottom: 15px;"></div>
         <input type="hidden" id="clientSelectedCard" value="">
         
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
             <input type="number" id="clientPosQty" class="glass-input" placeholder="العدد" value="1" min="1" style="width: 80px; margin-bottom: 0; text-align: center;">
             <button class="btn btn-retail" style="flex: 1; padding: 10px; font-size: 14px;" onclick="clientPosSell()"><i class="fas fa-shopping-cart"></i> بيع الكرت المحدد</button>
         </div>
-    </div>
 
-    <!-- الصندوق الرابع: الخدمات السريعة -->
-    <div class="bento-box" style="border-color: #38ef7d;">
-        <div class="bento-header">
-            <span class="bento-title"><i class="fas fa-bolt" style="color:#38ef7d;"></i> خدمات سريعة</span>
-        </div>
+        <hr style="border-color:rgba(255,255,255,0.1); margin:15px 0;">
+        
+        <h4 style="margin-bottom: 10px; font-size: 12px; color: #ccc;">إجراءات البضاعة:</h4>
         <div class="bento-grid">
-            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
-            <div id="telecom-quick-action" class="bento-btn" onclick="telecomApp.showDashboard('client-lobby-screen')" style="display: none;">
-                <i class="fas fa-mobile-alt" style="color: #00d2ff;"></i>
-                <span>شحن رصيد وباقات</span>
-            </div>
             <div class="bento-btn" onclick="orderNetworkCards()">
                 <i class="fas fa-truck-loading" style="color: #38ef7d;"></i>
                 <span>طلب كروت جديدة</span>
-            </div>
-            <div class="bento-btn" onclick="clientExtractECard()">
-                <i class="fas fa-wifi" style="color: #8e2de2;"></i>
-                <span>استخراج كرت إلكتروني</span>
             </div>
             <div class="bento-btn" onclick="reportDamagedCard()">
                 <i class="fas fa-heart-broken" style="color: #ff4757;"></i>
@@ -2014,7 +2017,6 @@
             <i class="fas fa-chevron-left" style="color: #555;"></i>
         </div>
 
-        <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
         <div id="telecom-history-btn" class="bento-btn" style="display: none; flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="viewTelecomHistory()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-list-alt" style="color: #00d2ff; font-size: 20px;"></i>
@@ -2063,25 +2065,13 @@
             <i id="bio-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
         </div>
 
-        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-rocket" style="color: #f5af19; font-size: 20px;"></i>
                 <span style="font-size: 14px; color: #fff; font-weight: bold;">وضع الأجهزة الضعيفة</span>
             </div>
             <i id="lite-toggle-icon-bento" class="fas fa-toggle-off" style="color: #ff4757; font-size: 20px;"></i>
         </div>
-
-        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleVoice()">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <i class="fas fa-volume-up" style="color: #38ef7d; font-size: 20px;"></i>
-                <span style="font-size: 14px; color: #fff; font-weight: bold;">الناطق الصوتي</span>
-            </div>
-            <i id="voice-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
-        </div>
-
-        <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px; margin-bottom: 10px; background: transparent; border: 1px solid #ff4757; color: #ff4757;" onclick="factoryReset()">
-            <i class="fas fa-trash-alt"></i> ضبط المصنع
-        </button>
 
         <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px;" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
@@ -7495,19 +7485,15 @@ async function fetchClientPermission(clientId) {
             let telecomDash = document.getElementById('telecom-dashboard');
             if(telecomDash) telecomDash.style.display = 'none';
             
-            // 🌟 التعديل: إخفاء تطبيق الكروت الورقية وأشرطة البقالة السفلية ??
             let physicalApp = document.getElementById('physical-app-container');
             if(physicalApp) physicalApp.style.display = 'none';
             
             let clientTelecomNav = document.getElementById('telecom-client-bottom-nav');
             if(clientTelecomNav) clientTelecomNav.style.display = 'none';
 
-            let physicalNav = document.getElementById('physical-bottom-nav');
-            if(physicalNav) physicalNav.style.display = 'none';
-
-            // 🌟 الإصلاح: إخفاء الشريط السفلي الموحد للعميل الذي كان يبقى ظاهراً 🌟
-            let clientUnifiedNav = document.getElementById('client-unified-bottom-nav');
-            if(clientUnifiedNav) clientUnifiedNav.style.display = 'none';
+            // 🌟 الإصلاح الجذري: إخفاء المنصة العائمة للعميل عند خروج الوكيل 🌟
+            let clientFloatingDock = document.getElementById('client-floating-dock');
+            if(clientFloatingDock) clientFloatingDock.style.display = 'none';
 
             // فحص نوع الحساب الأصلي للعودة للشاشة الصحيحة
             if (userId === MANAGER_ID) {
@@ -7518,13 +7504,12 @@ async function fetchClientPermission(clientId) {
             } else if (userId === ADMIN_ID) {
                 showToast("تم العودة لشخصية الوكيل المعتمد 👨‍💻", "success");
                 applyRoleTheme('agent');
-                // 🚀 الإصلاح: إجبار النظام على إعادة كتابة اسم الوكيل في أعلى الشاشة
                 document.getElementById('welcome-msg').innerText = getSmartGreeting("الوكيل وليد 👨‍💻");
                 showAgentScreen();
             }
         }
     }
-    
+
     async function agentGhostMode() {
         showToast("⏳ جاري جلب قائمة البقالات...", "warning");
         try {
@@ -11054,20 +11039,20 @@ async function giveCardsToClient() {
         playSound('click');
         document.getElementById('physical-app-container').style.display = 'none';
         document.getElementById('client-lobby-screen').style.display = 'block';
+        
+        // إعادة إظهار المنصة العائمة عند الخروج من نقطة البيع
+        let floatingDock = document.getElementById('client-floating-dock');
+        if(floatingDock) floatingDock.style.display = 'flex';
     }
 
-    // دالة فتح تطبيق الكروت من صالة الاستقبال
     function openPhysicalApp() {
         playSound('click');
-        document.getElementById('client-lobby-screen').style.display = 'none';
+        document.querySelectorAll('.screen-section').forEach(el => el.style.display = 'none');
         document.getElementById('physical-app-container').style.display = 'block';
         
-        // 🌟 الحل الجذري: إجبار الشريط السفلي على الظهور دائماً
-        let physicalNav = document.getElementById('physical-bottom-nav');
-        if(physicalNav) physicalNav.style.display = 'flex';
-        
-        // تفعيل التبويب الأول افتراضياً
-        switchPhysicalTab('physical-main-tab', document.querySelectorAll('#physical-bottom-nav .nav-item')[0]);
+        // إخفاء المنصة العائمة لكي يتفرغ الكاشير للبيع بدون مشتتات
+        let floatingDock = document.getElementById('client-floating-dock');
+        if(floatingDock) floatingDock.style.display = 'none';
     }
 
     // ================= دالة إحصائيات الكروت الإلكترونية =================
