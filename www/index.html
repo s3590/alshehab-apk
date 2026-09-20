@@ -636,6 +636,43 @@
         }
         @keyframes rotate-glow { 100% { transform: rotate(360deg); } }
 
+/* ================= تصميم المنصة العائمة وصناديق البينتو (VIP) ================= */
+.floating-dock {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: 90%; max-width: 400px; background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 30px;
+    display: flex; justify-content: space-around; padding: 10px 5px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.2);
+    z-index: 1000;
+}
+.dock-item {
+    color: rgba(255, 255, 255, 0.5); text-align: center; font-size: 11px;
+    display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: 0.3s;
+    flex: 1; padding: 5px 0; border-radius: 20px;
+}
+.dock-item.active {
+    color: #00d2ff; background: rgba(0, 210, 255, 0.1);
+    box-shadow: inset 0 0 10px rgba(0, 210, 255, 0.2);
+}
+.dock-item i { font-size: 20px; margin-bottom: 2px; }
+
+.bento-box {
+    background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px; padding: 15px; margin-bottom: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+}
+.bento-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.bento-title { color: #fff; font-size: 14px; font-weight: bold; }
+.bento-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bento-btn {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 15px; padding: 12px; text-align: center; color: #ccc;
+    font-size: 12px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.bento-btn:active { transform: scale(0.95); background: rgba(0, 210, 255, 0.1); border-color: #00d2ff; color: #fff; }
+.bento-btn i { font-size: 24px; }
+
         /* ================= تأثير الكروت ثلاثية الأبعاد (3D Parallax) ================= */
         .card-box, .price-card {
             transform-style: preserve-3d;
@@ -1580,6 +1617,7 @@
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ff4757; border-color: #ff4757;" onclick="startReturnWizard()"><i class="fas fa-undo-alt"></i> مرتجعات وتوالف</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #f5af19; border-color: #f5af19;" onclick="startAiDailyEntry()"><i class="fas fa-camera"></i> إدخال بالصورة</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #00d2ff; border-color: #00d2ff;" onclick="agentReceiveECards()"><i class="fas fa-paste"></i> استلام إلكتروني</button>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ed213a; border-color: #ed213a;" onclick="viewSupportTickets()"><i class="fas fa-ticket-alt"></i> تذاكر التوالف</button>
     </div>
     
     <button class="btn btn-outline" style="width: 100%; margin-top: 10px; font-size: 13px; color: #8e2de2; border-color: #8e2de2;" onclick="agentGhostMode()"><i class="fas fa-mask"></i> دخول لحساب عميل (تخفي)</button>
@@ -1637,6 +1675,14 @@
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #0ba360; border-color: #0ba360;" onclick="alignDishTool()"><i class="fas fa-satellite-dish"></i> ضبط الصحون</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #cbd5e1; border-color: #cbd5e1;" onclick="toggleMaintenance()"><i class="fas fa-power-off"></i> وضع الصيانة</button>
     </div>
+
+    <h4 style="color: #ccc; font-size: 13px; margin-top: 15px; margin-bottom: 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;"><i class="fas fa-user-shield"></i> إعدادات الحساب والأمان</h4>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ccc; border-color: #ccc;" onclick="changePin()"><i class="fas fa-key"></i> تغيير الرمز السري</button>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #8e2de2; border-color: #8e2de2;" onclick="toggleBiometricSetting()"><i class="fas fa-fingerprint"></i> البصمة</button>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #f5af19; border-color: #f5af19;" onclick="toggleLiteMode()"><i class="fas fa-rocket"></i> وضع التيربو</button>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ff4757; border-color: #ff4757;" onclick="showFailedOps()"><i class="fas fa-exclamation-triangle"></i> العمليات المرفوضة</button>
+    </div>
     
     <!-- زر تسجيل الخروج للوكيل -->
     <button class="btn btn-danger" style="width: 100%; margin-top: 15px; font-size: 13px; border: 1px solid #ff4757; background: linear-gradient(to right, #ed213a, #93291e);" onclick="logout()">
@@ -1665,26 +1711,6 @@
     <div class="nav-item" onclick="switchAgentTab('agent-settings-screen', this)">
         <i class="fas fa-cogs" style="font-size: 18px;"></i>
         <span>الإعدادات</span>
-    </div>
-</div>
-
-<!-- 🌟 شريط التنقل السفلي الموحد للعميل (البقالة) 🌟 -->
-<div id="client-unified-bottom-nav" class="bottom-nav" style="display: none; z-index: 105;">
-    <div class="nav-item active" onclick="switchClientUnifiedTab('client-lobby-screen', this)">
-        <i class="fas fa-home" style="font-size: 18px;"></i>
-        <span>الرئيسية</span>
-    </div>
-    <div class="nav-item" onclick="openStatementModal()">
-        <i class="fas fa-file-invoice-dollar" style="font-size: 18px;"></i>
-        <span>السجل</span>
-    </div>
-    <div class="nav-item" onclick="openChat()">
-        <i class="fas fa-headset" style="font-size: 18px;"></i>
-        <span>الدعم</span>
-    </div>
-    <div class="nav-item" onclick="openSettingsModal()">
-        <i class="fas fa-cog" style="font-size: 18px;"></i>
-        <span>حسابي</span>
     </div>
 </div>
 
@@ -1853,142 +1879,197 @@
     </button>
 </div>
 
-<!-- ================= 9. لوحة التحكم الشاملة للعميل (Unified Dashboard) ================= -->
-<div id="client-lobby-screen" class="screen-section" style="display: none; padding: 0 15px;">
-    
-    <!-- 🌟 لوحة العروض للعملاء 🌟 -->
-    <div id="client-promo-banner" style="display: none; margin-bottom: 15px;"></div>
-
-    <!-- 🌟 الملخص المالي الموحد (Financial Dashboard) 🌟 -->
-    <div class="glass-panel vip-glow" style="margin: 0 0 20px 0; padding: 20px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(0, 210, 255, 0.05)); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 20px;">
-        <div style="text-align: center; margin-bottom: 15px;">
-            <p style="color: #ccc; font-size: 12px; margin-bottom: 5px;">إجمالي المديونية المطلوبة</p>
-            <h2 id="unified-total-debt" style="color: #ff4757; font-size: 28px; font-weight: 900; text-shadow: 0 0 15px rgba(255, 71, 87, 0.4);">0 <span style="font-size: 14px;">ريال</span></h2>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-            <!-- دين الكروت -->
-            <div id="cards-debt-box" style="background: rgba(245, 175, 25, 0.1); border: 1px solid rgba(245, 175, 25, 0.3); border-radius: 12px; padding: 10px; text-align: center; transition: 0.3s;">
-                <i class="fas fa-ticket-alt" style="color: #f5af19; font-size: 16px; margin-bottom: 5px;"></i>
-                <div style="color: #ccc; font-size: 10px;">دين الكروت</div>
-                <div id="unified-cards-debt" style="color: #f5af19; font-size: 14px; font-weight: bold; margin-top: 3px;">0 ريال</div>
-            </div>
-            <!-- دين التسديدات -->
-            <div id="telecom-debt-box" style="background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 12px; padding: 10px; text-align: center;">
-                <i class="fas fa-bolt" style="color: #00d2ff; font-size: 16px; margin-bottom: 5px;"></i>
-                <div style="color: #ccc; font-size: 10px;">سلف التسديدات</div>
-                <div id="unified-telecom-debt" style="color: #00d2ff; font-size: 14px; font-weight: bold; margin-top: 3px;">0 ريال</div>
-            </div>
-        </div>
-        
-        <!-- رصيد التسديدات المقدم -->
-        <div id="telecom-balance-box" style="margin-top: 10px; background: rgba(56, 239, 125, 0.1); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 12px; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #ccc; font-size: 11px;"><i class="fas fa-wallet" style="color: #38ef7d;"></i> رصيد الشحن المقدم:</span>
-            <strong id="unified-telecom-balance" style="color: #38ef7d; font-size: 14px;">0 ريال</strong>
-        </div>
+<!-- 🌟 المنصة العائمة الفخمة للعميل (Floating Dock) 🌟 -->
+<div id="client-floating-dock" class="floating-dock" style="display: none;">
+    <div class="dock-item active" onclick="switchClientUnifiedTab('client-lobby-screen', this)">
+        <i class="fas fa-home"></i>
+        <span>الرئيسية</span>
     </div>
-
-    <!-- 🌟 الإجراءات السريعة (Quick Actions) 🌟 -->
-    <h4 style="color: #fff; font-size: 14px; margin-bottom: 12px; font-weight: bold;">إجراءات سريعة</h4>
-    <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; scrollbar-width: none;">
-        <div id="telecom-quick-action" onclick="telecomApp.showDashboard('client-lobby-screen')" style="min-width: 75px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;">
-            <div style="width: 55px; height: 55px; border-radius: 18px; background: linear-gradient(135deg, #00d2ff, #3a7bd5); display: flex; align-items: center; justify-content: center; font-size: 22px; color: white; box-shadow: 0 6px 15px rgba(0, 210, 255, 0.4);"><i class="fas fa-mobile-alt"></i></div>
-            <span style="color: #ccc; font-size: 11px; font-weight: bold;">شحن رصيد</span>
-        </div>
-        <div onclick="clientExtractECard()" style="min-width: 75px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;">
-            <div style="width: 55px; height: 55px; border-radius: 18px; background: linear-gradient(135deg, #8e2de2, #4a00e0); display: flex; align-items: center; justify-content: center; font-size: 22px; color: white; box-shadow: 0 6px 15px rgba(142, 45, 226, 0.4);"><i class="fas fa-wifi"></i></div>
-            <span style="color: #ccc; font-size: 11px; font-weight: bold;">كروت إلكترونية</span>
-        </div>
-        <div onclick="openPhysicalApp()" style="min-width: 75px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;">
-            <div style="width: 55px; height: 55px; border-radius: 18px; background: linear-gradient(135deg, #f5af19, #f12711); display: flex; align-items: center; justify-content: center; font-size: 22px; color: white; box-shadow: 0 6px 15px rgba(245, 175, 25, 0.4);"><i class="fas fa-ticket-alt"></i></div>
-            <span style="color: #ccc; font-size: 11px; font-weight: bold;">كروت ورقية</span>
-        </div>
-        <div onclick="openChat()" style="min-width: 75px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;">
-            <div style="width: 55px; height: 55px; border-radius: 18px; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #00d2ff; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #00d2ff; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);"><i class="fas fa-headset"></i></div>
-            <span style="color: #ccc; font-size: 11px; font-weight: bold;">الدعم الفني</span>
-        </div>
+    <div class="dock-item" onclick="switchClientUnifiedTab('client-records-screen', this)">
+        <i class="fas fa-chart-pie"></i>
+        <span>السجلات</span>
     </div>
-
-    <!-- 🌟 حالة الخدمات (البطاقات القديمة) 🌟 -->
-    <h4 style="color: #fff; font-size: 14px; margin-bottom: 12px; font-weight: bold;">حالة الخدمات</h4>
-    <div id="lobby-buttons-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-        <!-- سيتم حقن الأزرار هنا برمجياً -->
+    <div class="dock-item" onclick="switchClientUnifiedTab('client-settings-screen', this)">
+        <i class="fas fa-cog"></i>
+        <span>حسابي</span>
     </div>
 </div>
 
-<!-- ================= 10. تطبيق الكروت الورقية (مستقل) ================= -->
-<div id="physical-app-container" style="display: none; padding-bottom: 80px;">
+<!-- ================= 1. الشاشة الرئيسية للعميل (Bento Box UI) ================= -->
+<div id="client-lobby-screen" class="screen-section" style="display: none; padding: 0 15px; padding-bottom: 100px;">
     
-    <!-- التبويب الرئيسي (نقطة البيع) -->
-    <div id="physical-main-tab" class="screen-section" style="display: block;">
-        <div class="glass-panel" style="border-color: #f5af19;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-                <h3 style="color: #f5af19; margin: 0; font-size: 16px;"><i class="fas fa-ticket-alt"></i> الكروت الورقية</h3>
-                <button onclick="closePhysicalApp()" class="btn-danger" style="padding: 6px 12px; border-radius: 8px; font-size: 12px;"><i class="fas fa-arrow-right"></i> خروج</button>
-            </div>
-            
-            <h4 style="margin-bottom: 8px; font-size: 14px;"><i class="fas fa-box-open"></i> الكروت المتبقية في عهدتك:</h4>
-            <div class="cards-scroll" id="client-inv-scroll" style="margin-bottom: 15px;"></div>
-            <input type="hidden" id="clientSelectedCard" value="">
+    <div id="client-promo-banner" style="display: none; margin-bottom: 15px;"></div>
 
-            <h4 style="margin-bottom: 8px; font-size: 14px; color: #38ef7d;"><i class="fas fa-cash-register"></i> نقطة البيع السريعة (POS)</h4>
-            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="number" id="clientPosQty" class="glass-input" placeholder="العدد" value="1" min="1" style="width: 100%; margin-bottom: 0; text-align: center; font-weight: bold;">
+    <!-- الصندوق الأول: المركز المالي -->
+    <div class="bento-box vip-glow" style="border-color: #00d2ff;">
+        <div class="bento-header">
+            <span class="bento-title"><i class="fas fa-wallet" style="color:#00d2ff;"></i> المركز المالي</span>
+            <button class="btn-small" style="background: rgba(0,210,255,0.2); color: #00d2ff; border: 1px solid #00d2ff;" onclick="openStatementModal()"><i class="fas fa-file-invoice"></i> كشف حسابي</button>
+        </div>
+        <div style="text-align: center; margin-bottom: 15px;">
+            <p style="color: #ccc; font-size: 11px; margin-bottom: 5px;">إجمالي المديونية المطلوبة</p>
+            <h2 id="unified-total-debt" style="color: #ff4757; font-size: 28px; font-weight: 900;">0 <span style="font-size: 14px;">ريال</span></h2>
+            <p style="color: #aaa; font-size: 10px;">سقف المديونية: <span id="client-limit">0</span> ريال</p>
+            <span id="client-debt" style="display:none;">0</span> <!-- مخفي برمجياً للحفاظ على عمل الكود القديم -->
+        </div>
+        <div style="display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+            <div id="cards-debt-box" style="flex: 1; text-align: center;">
+                <div style="color: #f5af19; font-size: 10px;">دين الكروت</div>
+                <div id="unified-cards-debt" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
             </div>
-            <button class="btn btn-retail" style="width: 100%; padding: 12px; font-size: 15px;" onclick="clientPosSell()"><i class="fas fa-shopping-cart"></i> ابدأ عملية البيع</button>
+            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
+            <div id="telecom-debt-box" style="flex: 1; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); display: none;">
+                <div style="color: #00d2ff; font-size: 10px;">سلف التسديدات</div>
+                <div id="unified-telecom-debt" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
+            </div>
+            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
+            <div id="telecom-balance-box" style="flex: 1; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); display: none;">
+                <div style="color: #38ef7d; font-size: 10px;">رصيد مقدم</div>
+                <div id="unified-telecom-balance" style="color: #fff; font-size: 13px; font-weight: bold;">0 ريال</div>
+            </div>
         </div>
     </div>
 
-    <!-- تبويب حسابي (الديون والطلبات) -->
-    <div id="physical-account-tab" class="screen-section" style="display: none;">
-        <div class="glass-panel">
-            <h3 style="margin-bottom: 15px; text-align: center; color: #00d2ff;"><i class="fas fa-user-cog"></i> حسابي (الكروت)</h3>
-            
-            <div class="debt-card vip-glow red">
-                <p style="font-size: 14px;">مجموع حسابي(قيمة الكروت)</p>
-                <div class="debt-amount" id="client-debt">0 ريال</div>
-                <p style="font-size: 11px; color: #ddd;">سقف المديونية: <span id="client-limit">0</span> ريال</p>
-                <div class="progress-bg"><div class="progress-bar" id="debt-progress"></div></div>
+    <!-- الصندوق الثاني: أرباحي -->
+    <div class="bento-box stat-box vip-glow" style="border-color: gold; display: block;">
+        <div class="bento-header">
+            <span class="bento-title"><i class="fas fa-chart-line" style="color:gold;"></i> أرباحي من الكروت</span>
+        </div>
+        <div class="bento-grid">
+            <div style="text-align: center; background: rgba(56, 239, 125, 0.1); padding: 10px; border-radius: 10px; border: 1px solid rgba(56, 239, 125, 0.3);">
+                <div style="color: #38ef7d; font-size: 10px;">أرباح اليوم ☀️</div>
+                <div id="client-daily-profit" style="color: #38ef7d; font-size: 16px; font-weight: bold;">0 ريال</div>
             </div>
-
-            <h4 style="margin-bottom: 8px; font-size: 14px; color: gold;"><i class="fas fa-chart-line"></i> أرباحي من الكروت:</h4>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                <div class="stat-box vip-glow green" style="margin-bottom: 0; flex-direction: column; align-items: center; padding: 12px;">
-                    <div class="stat-title" style="font-size: 11px; color: #38ef7d;">أرباح اليوم ☀️</div>
-                    <div class="stat-value pop-anim" id="client-daily-profit" style="color: #38ef7d; font-size: 20px;">0 ريال</div>
-                </div>
-                <div class="stat-box vip-glow gold" style="margin-bottom: 0; flex-direction: column; align-items: center; padding: 12px;">
-                    <div class="stat-title" style="font-size: 11px; color: gold;">أرباح الشهر 🌙</div>
-                    <div class="stat-value pop-anim" id="client-monthly-profit" style="color: gold; font-size: 20px;">0 ريال</div>
-                    <div style="font-size: 10px; color: #aaa; margin-top: 6px; font-weight: bold;">الشهر الماضي: <span id="client-last-month-profit" style="color: #fff;">0</span> ريال 🏆</div>
-                </div>
+            <div style="text-align: center; background: rgba(255, 215, 0, 0.1); padding: 10px; border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.3);">
+                <div style="color: gold; font-size: 10px;">أرباح الشهر 🌙</div>
+                <div id="client-monthly-profit" style="color: gold; font-size: 16px; font-weight: bold;">0 ريال</div>
+                <div style="font-size: 9px; color: #aaa; margin-top: 4px;">الشهر الماضي: <span id="client-last-month-profit">0</span></div>
             </div>
-
-            <h4 style="margin-bottom: 8px; font-size: 14px; color: #00d2ff;"><i class="fas fa-concierge-bell"></i> الطلبات والدعم:</h4>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #8e2de2; border-color: #8e2de2;" onclick="orderNetworkCards()"><i class="fas fa-cart-plus"></i> طلب كروت</button>
-                <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ff4757; border-color: #ff4757;" onclick="reportDamagedCard()"><i class="fas fa-camera"></i> كرت تالف</button>
-            </div>
-
-            <button class="btn btn-outline" style="width: 100%; margin-bottom: 10px;" onclick="openStatementModal()"><i class="fas fa-file-invoice-dollar"></i> كشف حساب الكروت</button>
-            
-            <!-- 🚀 الزر الجديد: سجل الكروت الإلكترونية المباعة -->
-            <button class="btn btn-outline" style="width: 100%; margin-bottom: 10px; border-color: #8e2de2; color: #e0b0ff; background: rgba(142, 45, 226, 0.1);" onclick="showMyECards()">
-                <i class="fas fa-history"></i> سجل الكروت الإلكترونية المباعة
-            </button>
-            
-            <!-- 🌟 زر الدعم الفني الجديد 🌟 -->
-            <button class="btn" style="width: 100%; margin-bottom: 15px; background: linear-gradient(to right, #1e293b, #0f172a); border: 1px solid #00d2ff; color: #00d2ff; font-size: 13px;" onclick="openChat()">
-                <i class="fas fa-headset"></i> الدعم الفني والطلبات
-            </button>
         </div>
     </div>
 
-    <!-- الشريط السفلي لتطبيق الكروت -->
-    <div id="physical-bottom-nav" class="bottom-nav">
-        <div class="nav-item active" onclick="switchPhysicalTab('physical-main-tab', this)"><i class="fas fa-ticket-alt" style="font-size: 18px;"></i><span>نقطة البيع</span></div>
-        <div class="nav-item" onclick="openCustomerDebtModal()"><i class="fas fa-book" style="font-size: 18px;"></i><span>دفتر الديون</span></div>
-        <div class="nav-item" onclick="switchPhysicalTab('physical-account-tab', this)"><i class="fas fa-user" style="font-size: 18px;"></i><span>حسابي</span></div>
+    <!-- الصندوق الثالث: نقطة البيع السريعة (المخزون) -->
+    <div class="bento-box" style="border-color: #f5af19;">
+        <div class="bento-header">
+            <span class="bento-title"><i class="fas fa-box-open" style="color:#f5af19;"></i> مخزون الكروت (نقطة البيع)</span>
+        </div>
+        <div class="cards-scroll" id="client-inv-scroll" style="margin-bottom: 10px;"></div>
+        <input type="hidden" id="clientSelectedCard" value="">
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="number" id="clientPosQty" class="glass-input" placeholder="العدد" value="1" min="1" style="width: 80px; margin-bottom: 0; text-align: center;">
+            <button class="btn btn-retail" style="flex: 1; padding: 10px; font-size: 14px;" onclick="clientPosSell()"><i class="fas fa-shopping-cart"></i> بيع الكرت المحدد</button>
+        </div>
+    </div>
+
+    <!-- الصندوق الرابع: الخدمات السريعة -->
+    <div class="bento-box" style="border-color: #38ef7d;">
+        <div class="bento-header">
+            <span class="bento-title"><i class="fas fa-bolt" style="color:#38ef7d;"></i> خدمات سريعة</span>
+        </div>
+        <div class="bento-grid">
+            <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
+            <div id="telecom-quick-action" class="bento-btn" onclick="telecomApp.showDashboard('client-lobby-screen')" style="display: none;">
+                <i class="fas fa-mobile-alt" style="color: #00d2ff;"></i>
+                <span>شحن رصيد وباقات</span>
+            </div>
+            <div class="bento-btn" onclick="orderNetworkCards()">
+                <i class="fas fa-truck-loading" style="color: #38ef7d;"></i>
+                <span>طلب كروت جديدة</span>
+            </div>
+            <div class="bento-btn" onclick="clientExtractECard()">
+                <i class="fas fa-wifi" style="color: #8e2de2;"></i>
+                <span>استخراج كرت إلكتروني</span>
+            </div>
+            <div class="bento-btn" onclick="reportDamagedCard()">
+                <i class="fas fa-heart-broken" style="color: #ff4757;"></i>
+                <span>الإبلاغ عن كرت تالف</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= 2. شاشة السجلات والتقارير ================= -->
+<div id="client-records-screen" class="screen-section" style="display: none; padding: 0 15px; padding-bottom: 100px;">
+    <h3 style="color: #00d2ff; margin-bottom: 15px; text-align: center;"><i class="fas fa-chart-pie"></i> السجلات والتقارير</h3>
+    
+    <div class="bento-box" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="openCustomerDebtModal()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-book" style="color: #f5af19; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">دفتر ديون زبائني</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #555;"></i>
+        </div>
+
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="showMyECards()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-history" style="color: #8e2de2; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">سجل الكروت الإلكترونية المباعة</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #555;"></i>
+        </div>
+
+        <!-- 🔒 مخفي افتراضياً (يظهر للوكيل والتجربة فقط) -->
+        <div id="telecom-history-btn" class="bento-btn" style="display: none; flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="viewTelecomHistory()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-list-alt" style="color: #00d2ff; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">سجل عمليات الشحن (التسديدات)</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #555;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- ================= 3. شاشة حسابي والإعدادات ================= -->
+<div id="client-settings-screen" class="screen-section" style="display: none; padding: 0 15px; padding-bottom: 100px;">
+    <h3 style="color: #38ef7d; margin-bottom: 15px; text-align: center;"><i class="fas fa-cog"></i> حسابي والإعدادات</h3>
+    
+    <div class="bento-box" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 15px; background: linear-gradient(to right, #1e293b, #0f172a); border-color: #00d2ff;" onclick="openChat()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-headset" style="color: #00d2ff; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #00d2ff; font-weight: bold;">الدعم الفني والشكاوي</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #00d2ff;"></i>
+        </div>
+
+        <div id="manage-cashiers-btn-bento" class="bento-btn" style="display: none; flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="openCashierManagement()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-users-cog" style="color: #f5af19; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">إدارة العمال (الكاشير)</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #555;"></i>
+        </div>
+
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="changePin()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-key" style="color: #ccc; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">تغيير الرمز السري</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #555;"></i>
+        </div>
+
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleBiometricSetting()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-fingerprint" style="color: #8e2de2; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">الدخول بالبصمة</span>
+            </div>
+            <i id="bio-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
+        </div>
+
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-rocket" style="color: #f5af19; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">وضع الأجهزة الضعيفة</span>
+            </div>
+            <i id="lite-toggle-icon-bento" class="fas fa-toggle-off" style="color: #ff4757; font-size: 20px;"></i>
+        </div>
+
+        <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px;" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+        </button>
     </div>
 </div>
 
@@ -2141,13 +2222,6 @@
                 <i id="lite-toggle-icon" class="fas fa-toggle-off" style="color: #ff4757;"></i>
             </button>
             
-            <!-- أدوات الوكيل المتقدمة (تظهر للوكيل فقط برمجياً) -->
-            <div id="agent-advanced-tools" style="display: none; flex-direction: column; gap: 12px;">
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 5px 0;">
-                <h4 style="color: #00d2ff; font-size: 13px; text-align: center;">🛠️ أدوات النظام المتقدمة</h4>
-                <button class="btn" style="background: linear-gradient(to right, #ed213a, #93291e);" onclick="viewSupportTickets()"><i class="fas fa-ticket-alt"></i> تذاكر الدعم الفني (التوالف)</button>
-            </div>
-
             <hr style="border-color: rgba(255,255,255,0.1); margin: 5px 0;">
             
             <h4 style="color: #ff4757; font-size: 12px; margin-bottom: -5px;">⚠️ منطقة الخطر</h4>
@@ -6534,29 +6608,39 @@ async function fetchClientPermission(clientId) {
             if(data.role === 'client') {
                 applyRoleTheme('client');
 
-                // ?? إخفاء أقسام التسديدات مؤقتاً وترتيب الشاشة 🌟
+                // 🌟 إخفاء/إظهار أقسام التسديدات حسب الصلاحية (للتجربة والوكيل فقط) 🌟
                 let showTelecom = (userId === ADMIN_ID || userId === 999999);
                 
                 let telecomDebtBox = document.getElementById('telecom-debt-box');
                 let telecomBalanceBox = document.getElementById('telecom-balance-box');
                 let telecomQuickAction = document.getElementById('telecom-quick-action');
-                let cardsDebtBox = document.getElementById('cards-debt-box');
+                let telecomHistoryBtn = document.getElementById('telecom-history-btn');
                 
                 if (!showTelecom) {
                     if(telecomDebtBox) telecomDebtBox.style.display = 'none';
                     if(telecomBalanceBox) telecomBalanceBox.style.display = 'none';
                     if(telecomQuickAction) telecomQuickAction.style.display = 'none';
-                    if(cardsDebtBox) cardsDebtBox.style.gridColumn = 'span 2'; // تمديد كرت الديون ليملأ الشاشة بأناقة
+                    if(telecomHistoryBtn) telecomHistoryBtn.style.display = 'none';
                 } else {
                     if(telecomDebtBox) telecomDebtBox.style.display = 'block';
-                    if(telecomBalanceBox) telecomBalanceBox.style.display = 'flex';
+                    if(telecomBalanceBox) telecomBalanceBox.style.display = 'block';
                     if(telecomQuickAction) telecomQuickAction.style.display = 'flex';
-                    if(cardsDebtBox) cardsDebtBox.style.gridColumn = 'span 1';
+                    if(telecomHistoryBtn) telecomHistoryBtn.style.display = 'flex';
                 }
 
-                // 🌟 إظهار الشريط السفلي الموحد للعميل
-                let unifiedNav = document.getElementById('client-unified-bottom-nav');
-                if(unifiedNav) unifiedNav.style.display = 'flex';
+                // 🌟 إظهار المنصة العائمة للعميل
+                let floatingDock = document.getElementById('client-floating-dock');
+                if(floatingDock) floatingDock.style.display = 'flex';
+                
+                // 🌟 إظهار زر إدارة العمال لصاحب البقالة فقط في شاشة الإعدادات
+                let manageCashiersBtnBento = document.getElementById('manage-cashiers-btn-bento');
+                if (manageCashiersBtnBento) {
+                    if (userRole === 'client' && userId !== ADMIN_ID && userId !== MANAGER_ID && userId !== 0) {
+                        manageCashiersBtnBento.style.display = 'flex';
+                    } else {
+                        manageCashiersBtnBento.style.display = 'none';
+                    }
+                }
 
                 // 🌟 حساب الديون الموحدة (العزل المالي الذكي)
                 let cardsDebt = parseFloat(data.debt) || 0;
@@ -11148,8 +11232,8 @@ class TelecomGateway {
         document.getElementById('telecom-dashboard').style.display = 'block';
         
         // 🌟 إظهار الشريط السفلي المناسب 🌟
-        if (typeof userId !== 'undefined' && userId === ADMIN_ID && !originalManagerId) {
-            // للوكيل
+        if (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === MANAGER_ID || userId === 888888 || userId === 999999) && !originalManagerId) {
+            // للوكيل والإدارة والمدقق
             document.getElementById('telecom-balance-title').innerText = "رصيدي لدى المزود";
             document.getElementById('telecom-debt-title').innerText = "أرباحي من التسديدات";
             let limitContainer = document.getElementById('telecom-limit-container');
