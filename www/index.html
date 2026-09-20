@@ -2783,12 +2783,16 @@ async function checkForUpdates() {
     
     function applyLiteMode() {
         let icon = document.getElementById('lite-toggle-icon');
+        let iconBento = document.getElementById('lite-toggle-icon-bento'); // 🌟 دعم التصميم الجديد
+        
         if (isLiteMode) {
             document.body.classList.add('lite-mode');
             if(icon) { icon.className = 'fas fa-toggle-on'; icon.style.color = '#38ef7d'; }
+            if(iconBento) { iconBento.className = 'fas fa-toggle-on'; iconBento.style.color = '#38ef7d'; }
         } else {
             document.body.classList.remove('lite-mode');
             if(icon) { icon.className = 'fas fa-toggle-off'; icon.style.color = '#ff4757'; }
+            if(iconBento) { iconBento.className = 'fas fa-toggle-off'; iconBento.style.color = '#ff4757'; }
         }
     }
 
@@ -2797,7 +2801,7 @@ async function checkForUpdates() {
         isLiteMode = !isLiteMode;
         localStorage.setItem('lite_mode', isLiteMode);
         applyLiteMode();
-        showToast(isLiteMode ? "تم تفعيل وضع السرعة القصوى ??" : "تم إيقاف وضع السرعة القصوى 🎨", "success");
+        showToast(isLiteMode ? "تم تفعيل وضع السرعة القصوى 🚀" : "تم إيقاف وضع السرعة القصوى 🎨", "success");
     }
 
     // ================= الرادار الذكي (Adaptive Performance) =================
@@ -3344,16 +3348,16 @@ ${errorDetails}
         localStorage.setItem('biometric_enabled', isBiometricEnabled);
         
         let icon = document.getElementById('bio-toggle-icon');
-        if (icon) {
-            if (isBiometricEnabled) {
-                icon.className = 'fas fa-toggle-on';
-                icon.style.color = '#38ef7d';
-                showToast("تم تفعيل الدخول بالبصمة 🛡️", "success");
-            } else {
-                icon.className = 'fas fa-toggle-off';
-                icon.style.color = '#ff4757';
-                showToast("تم إيقاف الدخول بالبصمة 🔒", "warning");
-            }
+        let iconBento = document.getElementById('bio-toggle-icon-bento'); // 🌟 دعم التصميم الجديد
+        
+        if (isBiometricEnabled) {
+            if (icon) { icon.className = 'fas fa-toggle-on'; icon.style.color = '#38ef7d'; }
+            if (iconBento) { iconBento.className = 'fas fa-toggle-on'; iconBento.style.color = '#38ef7d'; }
+            showToast("تم تفعيل الدخول بالبصمة 🛡️", "success");
+        } else {
+            if (icon) { icon.className = 'fas fa-toggle-off'; icon.style.color = '#ff4757'; }
+            if (iconBento) { iconBento.className = 'fas fa-toggle-off'; iconBento.style.color = '#ff4757'; }
+            showToast("تم إيقاف الدخول بالبصمة 🔒", "warning");
         }
     }
 
@@ -7769,8 +7773,9 @@ async function fetchClientPermission(clientId) {
     
     // ================= دوال الإعدادات وضبط المصنع =================
     async function changePin() {
-        // إخفاء نافذة الإعدادات أولاً
-        document.getElementById('settingsModal').style.display = 'none';
+        // 🌟 الإصلاح: التحقق من وجود النافذة قبل إخفائها لمنع الخطأ
+        let sModal = document.getElementById('settingsModal');
+        if (sModal) sModal.style.display = 'none';
         
         // إظهار نافذة إدخال الرمز الجديد
         let newPin = await smartDialog({
@@ -7794,14 +7799,17 @@ async function fetchClientPermission(clientId) {
     }
 
     async function factoryReset() {
-        // إخفاء نافذة الإعدادات أولاً
-        document.getElementById('settingsModal').style.display = 'none';
+        // 🌟 الإصلاح: التحقق من وجود النافذة قبل إخفائها
+        let sModal = document.getElementById('settingsModal');
+        if (sModal) sModal.style.display = 'none';
         
         // إظهار نافذة التحذير الفخمة
         let confirmReset = await smartDialog({
             type: 'confirm',
             title: '⚠️ تحذير خطير!',
-            message: 'هل أنت متأكد أنك تريد عمل "ضبط مصنع"؟<br><br><small style="color:#ccc;">سيتم مسح حسابك، البصمة، والذاكرة من هذا الجهاز بالكامل وستحتاج لتسجيل الدخول من جديد.</small>',
+            message: 'هل أنت متأكد أنك تريد عمل "ضبط مصنع"؟  
+  
+<small style="color:#ccc;">سيتم مسح حسابك، البصمة، والذاكرة من هذا الجهاز بالكامل وستحتاج لتسجيل الدخول من جديد.</small>',
             icon: 'fa-exclamation-triangle',
             color: '#ff4757'
         });
