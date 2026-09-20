@@ -1682,10 +1682,14 @@
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #8e2de2; border-color: #8e2de2;" onclick="toggleBiometricSetting()"><i class="fas fa-fingerprint"></i> البصمة</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #f5af19; border-color: #f5af19;" onclick="toggleLiteMode()"><i class="fas fa-rocket"></i> وضع التيربو</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ff4757; border-color: #ff4757;" onclick="showFailedOps()"><i class="fas fa-exclamation-triangle"></i> العمليات المرفوضة</button>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d;" onclick="toggleVoice()"><i class="fas fa-volume-up"></i> الناطق الصوتي</button>
+        <button id="enable-push-btn" class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #0ba360; border-color: #0ba360;" onclick="subscribeToPush()"><i class="fas fa-bell"></i> تفعيل الإشعارات</button>
     </div>
     
+    <button class="btn btn-danger" style="width: 100%; margin-top: 15px; font-size: 12px; background: transparent; border: 1px solid #ff4757; color: #ff4757;" onclick="factoryReset()"><i class="fas fa-trash-alt"></i> حذف الحساب (ضبط المصنع)</button>
+
     <!-- زر تسجيل الخروج للوكيل -->
-    <button class="btn btn-danger" style="width: 100%; margin-top: 15px; font-size: 13px; border: 1px solid #ff4757; background: linear-gradient(to right, #ed213a, #93291e);" onclick="logout()">
+    <button class="btn btn-danger" style="width: 100%; margin-top: 10px; font-size: 13px; border: 1px solid #ff4757; background: linear-gradient(to right, #ed213a, #93291e);" onclick="logout()">
         <i class="fas fa-sign-out-alt"></i> تسجيل خروج
     </button>
 </div>
@@ -2059,13 +2063,25 @@
             <i id="bio-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
         </div>
 
-        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-rocket" style="color: #f5af19; font-size: 20px;"></i>
                 <span style="font-size: 14px; color: #fff; font-weight: bold;">وضع الأجهزة الضعيفة</span>
             </div>
             <i id="lite-toggle-icon-bento" class="fas fa-toggle-off" style="color: #ff4757; font-size: 20px;"></i>
         </div>
+
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleVoice()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-volume-up" style="color: #38ef7d; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">الناطق الصوتي</span>
+            </div>
+            <i id="voice-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
+        </div>
+
+        <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px; margin-bottom: 10px; background: transparent; border: 1px solid #ff4757; color: #ff4757;" onclick="factoryReset()">
+            <i class="fas fa-trash-alt"></i> ضبط المصنع
+        </button>
 
         <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px;" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
@@ -2178,72 +2194,6 @@
         <button class="btn btn-dark" style="width: 100%; margin-top: 15px;" onclick="document.getElementById('managerAdvancedModal').style.display='none'">
             <i class="fas fa-arrow-right"></i> رجوع
         </button>
-    </div>
-</div>
-
-<!-- ================= المودال (النوافذ المنبثقة) ================= -->
-<!-- مودال الإعدادات الشامل -->
-<div id="settingsModal" class="modal">
-    <div class="modal-content" style="max-width: 350px; max-height: 85vh; overflow-y: auto;">
-        <div class="chat-header">
-            <h3 style="font-size: 16px;"><i class="fas fa-sliders-h"></i> إعدادات التطبيق</h3>
-            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('settingsModal').style.display='none'"></i>
-        </div>
-        
-        <div style="padding: 15px 0; display: flex; flex-direction: column; gap: 12px;">
-            
-            <h4 style="color: #ccc; font-size: 12px; margin-bottom: -5px;">🔒 الأمان والدخول</h4>
-            
-            <!-- 🌟 زر إدارة العمال (يظهر برمجياً لصاحب البقالة فقط) 🌟 -->
-            <button id="manage-cashiers-btn" class="btn" style="background: linear-gradient(135deg, #f5af19, #f12711); display: none; justify-content: center; border: 1px solid #f5af19; margin-bottom: 10px;" onclick="document.getElementById('settingsModal').style.display='none'; openCashierManagement();">
-                <i class="fas fa-users-cog" style="font-size: 18px;"></i> إدارة العمال (الكاشير)
-            </button>
-                                
-            <!-- 🌟 زر تفعيل الإشعارات المنبثقة (Web Push) 🌟 -->
-            <button id="enable-push-btn" class="btn" style="background: linear-gradient(to right, #f5af19, #f12711); color: white; justify-content: center; margin-bottom: 10px;" onclick="subscribeToPush()">
-                <i class="fas fa-bell" style="font-size: 18px;"></i> تفعيل إشعارات التطبيق
-            </button>
-
-            <button class="btn btn-wholesale" onclick="changePin()"><i class="fas fa-key"></i> تغيير الرمز السري (PIN)</button>
-            <button class="btn" style="background: rgba(30, 41, 59, 0.8); border: 1px solid #00d2ff; justify-content: space-between;" onclick="toggleVoice()">
-                <span><i class="fas fa-volume-up"></i> الناطق الصوتي الذكي</span>
-                <i id="voice-toggle-icon" class="fas fa-toggle-on" style="color: #38ef7d;"></i>
-            </button>
-
-            <!-- 🌟 زر البصمة الجديد 🌟 -->
-            <button class="btn" style="background: rgba(30, 41, 59, 0.8); border: 1px solid #8e2de2; justify-content: space-between;" onclick="toggleBiometricSetting()">
-                <span><i class="fas fa-fingerprint" style="color: #8e2de2;"></i> الدخول بالبصمة / الوجه</span>
-                <i id="bio-toggle-icon" class="fas fa-toggle-on" style="color: #38ef7d;"></i>
-            </button>
-
-            <!-- 🌟 زر التيربو الجديد 🌟 -->
-            <button class="btn" style="background: rgba(30, 41, 59, 0.8); border: 1px solid #f5af19; justify-content: space-between;" onclick="toggleLiteMode()">
-                <span><i class="fas fa-rocket" style="color: #f5af19;"></i> وضع الأجهزة الضعيفة (سريع)</span>
-                <i id="lite-toggle-icon" class="fas fa-toggle-off" style="color: #ff4757;"></i>
-            </button>
-            
-            <hr style="border-color: rgba(255,255,255,0.1); margin: 5px 0;">
-            
-            <h4 style="color: #ff4757; font-size: 12px; margin-bottom: -5px;">⚠️ منطقة الخطر</h4>
-            <button class="btn btn-danger" onclick="factoryReset()"><i class="fas fa-trash-alt"></i> حذف الحساب من الجهاز (ضبط المصنع)</button>
-
-            <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-            
-            <!-- 🌟 زر تسجيل الخروج الجديد 🌟 -->
-            <button class="btn btn-danger" style="width: 100%; background: linear-gradient(to right, #ed213a, #93291e); border: 1px solid #ff4757;" onclick="logout()">
-                <i class="fas fa-sign-out-alt"></i> تسجيل خروج
-            </button>
-
-                <!-- زر الرجوع -->
-        <button class="btn btn-dark" style="width: 100%; margin-top: 10px;" onclick="document.getElementById('settingsModal').style.display='none'">
-            <i class="fas fa-arrow-right"></i> رجوع
-        </button>
-        
-        <!-- 🌟 عرض رقم الإصدار بأناقة 🌟 -->
-        <div style="text-align: center; margin-top: 15px; color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px;">
-            الإصدار: V-APP_VERSION_PLACEHOLDER
-        </div>
-</div>
     </div>
 </div>
 
@@ -7816,33 +7766,20 @@ async function fetchClientPermission(clientId) {
         await executeApiAction('/api/save_pricing_tier', fd, "⏳ جاري الحفظ...");
     }
 
-    // ================= دالة فتح الإعدادات بذكاء (تدعم وضع التخفي والعمال) =================
+    // ================= دالة فتح الإعدادات بذكاء (توجيه ذكي) =================
     function openSettingsModal() {
         playSound('click');
+        checkPushStatus(); 
         
-        checkPushStatus(); // 👈 هذا هو السطر الجديد الذي أضفناه
-        let agentTools = document.getElementById('agent-advanced-tools');
-        if (agentTools) {
-            // إظهار أدوات الوكيل فقط إذا كان الحساب الحالي هو حساب الوكيل الفعلي (وليس في وضع التخفي)
-            if (userId === ADMIN_ID) {
-                agentTools.style.display = 'flex';
-            } else {
-                agentTools.style.display = 'none';
-            }
+        if (userId === ADMIN_ID) {
+            // توجيه الوكيل لشاشة الإعدادات الخاصة به في الشريط السفلي
+            switchAgentTab('agent-settings-screen', document.querySelectorAll('#agent-bottom-nav .nav-item')[4]);
+        } else if (userId === MANAGER_ID) {
+            showToast("إعدادات المدير موجودة في الشاشة الرئيسية", "info");
+        } else {
+            // توجيه العميل (البقالة) لشاشة الإعدادات في المنصة العائمة
+            switchClientUnifiedTab('client-settings-screen', document.querySelectorAll('#client-floating-dock .dock-item')[2]);
         }
-        
-        // 🌟 إظهار زر إدارة العمال لصاحب البقالة فقط (وإخفاؤه عن العامل والوكيل)
-        let manageCashiersBtn = document.getElementById('manage-cashiers-btn');
-        if (manageCashiersBtn) {
-            let userRole = localStorage.getItem('user_role') || 'client';
-            if (userRole === 'client' && userId !== ADMIN_ID && userId !== MANAGER_ID && userId !== 0) {
-                manageCashiersBtn.style.display = 'flex';
-            } else {
-                manageCashiersBtn.style.display = 'none';
-            }
-        }
-        
-        document.getElementById('settingsModal').style.display = 'flex';
     }
     
     // ================= دوال الإعدادات وضبط المصنع =================
