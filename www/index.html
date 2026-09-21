@@ -72,7 +72,6 @@
             }, true); 
         })();
     </script>
-
     <meta charset="UTF-8">    
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
     <title>الشهاب pro</title>
@@ -7807,9 +7806,7 @@ async function fetchClientPermission(clientId) {
         let confirmReset = await smartDialog({
             type: 'confirm',
             title: '⚠️ تحذير خطير!',
-            message: 'هل أنت متأكد أنك تريد عمل "ضبط مصنع"؟  
-  
-<small style="color:#ccc;">سيتم مسح حسابك، البصمة، والذاكرة من هذا الجهاز بالكامل وستحتاج لتسجيل الدخول من جديد.</small>',
+            message: 'هل أنت متأكد أنك تريد عمل "ضبط مصنع"؟  <small style="color:#ccc;">سيتم مسح حسابك، البصمة، والذاكرة من هذا الجهاز بالكامل وستحتاج لتسجيل الدخول من جديد.</small>',
             icon: 'fa-exclamation-triangle',
             color: '#ff4757'
         });
@@ -7882,8 +7879,7 @@ async function fetchClientPermission(clientId) {
             let physicalCards = data.inventory.filter(i => !(i.card_type.includes('إلكتروني') || i.card_type.includes('الكتروني')));
             let cardsList = physicalCards.map(i => {
                 let match = i.card_type.match(/\d+/); let imgName = match ? match[0] : 'logo';
-                return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png`
- };
+                return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
             });
 
             let card = await smartSelect("اختر فئة الكرت", cardsList);
