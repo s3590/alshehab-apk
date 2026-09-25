@@ -2032,6 +2032,7 @@
     
     <div class="bento-box" style="padding: 0; background: transparent; border: none; box-shadow: none;">
         
+        <!-- زر الدعم الفني -->
         <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 15px; background: linear-gradient(to right, #1e293b, #0f172a); border-color: #00d2ff;" onclick="openChat()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-headset" style="color: #00d2ff; font-size: 20px;"></i>
@@ -2040,6 +2041,7 @@
             <i class="fas fa-chevron-left" style="color: #00d2ff;"></i>
         </div>
 
+        <!-- زر إدارة العمال -->
         <div id="manage-cashiers-btn-bento" class="bento-btn" style="display: none; flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="openCashierManagement()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-users-cog" style="color: #f5af19; font-size: 20px;"></i>
@@ -2048,6 +2050,25 @@
             <i class="fas fa-chevron-left" style="color: #555;"></i>
         </div>
 
+        <!-- 🌟 زر تفعيل الإشعارات (الجديد) 🌟 -->
+        <div id="enable-push-btn-bento" class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: linear-gradient(to right, #f5af19, #f12711); border-color: #f5af19;" onclick="subscribeToPush()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-bell" style="color: #fff; font-size: 20px;"></i>
+                <span id="push-btn-text" style="font-size: 14px; color: #fff; font-weight: bold;">تفعيل إشعارات التطبيق</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: rgba(255,255,255,0.7);"></i>
+        </div>
+
+        <!-- 🌟 زر الناطق الصوتي (الجديد) 🌟 -->
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleVoice()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-volume-up" style="color: #00d2ff; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #fff; font-weight: bold;">الناطق الصوتي الذكي</span>
+            </div>
+            <i id="voice-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
+        </div>
+
+        <!-- زر تغيير الرمز السري -->
         <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="changePin()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-key" style="color: #ccc; font-size: 20px;"></i>
@@ -2056,6 +2077,7 @@
             <i class="fas fa-chevron-left" style="color: #555;"></i>
         </div>
 
+        <!-- زر الدخول بالبصمة -->
         <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.9);" onclick="toggleBiometricSetting()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-fingerprint" style="color: #8e2de2; font-size: 20px;"></i>
@@ -2064,17 +2086,32 @@
             <i id="bio-toggle-icon-bento" class="fas fa-toggle-on" style="color: #38ef7d; font-size: 20px;"></i>
         </div>
 
-        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
+        <!-- زر وضع الأجهزة الضعيفة -->
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 15px; background: rgba(15, 23, 42, 0.9);" onclick="toggleLiteMode()">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-rocket" style="color: #f5af19; font-size: 20px;"></i>
                 <span style="font-size: 14px; color: #fff; font-weight: bold;">وضع الأجهزة الضعيفة</span>
             </div>
             <i id="lite-toggle-icon-bento" class="fas fa-toggle-off" style="color: #ff4757; font-size: 20px;"></i>
         </div>
+        
+        <!-- 🌟 زر ضبط المصنع (الجديد) 🌟 -->
+        <div class="bento-btn" style="flex-direction: row; justify-content: space-between; padding: 15px; margin-bottom: 20px; background: rgba(255, 71, 87, 0.1); border-color: #ff4757;" onclick="factoryReset()">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-trash-alt" style="color: #ff4757; font-size: 20px;"></i>
+                <span style="font-size: 14px; color: #ff4757; font-weight: bold;">حذف الحساب (ضبط المصنع)</span>
+            </div>
+            <i class="fas fa-chevron-left" style="color: #ff4757;"></i>
+        </div>
 
         <button class="btn btn-danger" style="width: 100%; padding: 15px; font-size: 14px; border-radius: 15px;" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
         </button>
+        
+        <!-- 🌟 رقم الإصدار (الجديد) 🌟 -->
+        <div style="text-align: center; margin-top: 15px; color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px;">
+            الإصدار: V-APP_VERSION_PLACEHOLDER
+        </div>
     </div>
 </div>
 
@@ -2762,18 +2799,18 @@ async function checkForUpdates() {
         localStorage.setItem('voice_enabled', isVoiceEnabled);
         
         let icon = document.getElementById('voice-toggle-icon');
-        if (icon) {
-            if (isVoiceEnabled) {
-                icon.className = 'fas fa-toggle-on';
-                icon.style.color = '#38ef7d';
-                showToast("تم تفعيل الناطق الصوتي 🔊", "success");
-                setTimeout(() => speakArabic("تم تفعيل الناطق الصوتي"), 500);
-            } else {
-                icon.className = 'fas fa-toggle-off';
-                icon.style.color = '#ff4757';
-                showToast("تم إيقاف الناطق الصوتي 🔇", "warning");
-                window.speechSynthesis.cancel();
-            }
+        let iconBento = document.getElementById('voice-toggle-icon-bento'); // 🌟 دعم التصميم الجديد
+        
+        if (isVoiceEnabled) {
+            if (icon) { icon.className = 'fas fa-toggle-on'; icon.style.color = '#38ef7d'; }
+            if (iconBento) { iconBento.className = 'fas fa-toggle-on'; iconBento.style.color = '#38ef7d'; }
+            showToast("تم تفعيل الناطق الصوتي 🔊", "success");
+            setTimeout(() => speakArabic("تم تفعيل الناطق الصوتي"), 500);
+        } else {
+            if (icon) { icon.className = 'fas fa-toggle-off'; icon.style.color = '#ff4757'; }
+            if (iconBento) { iconBento.className = 'fas fa-toggle-off'; iconBento.style.color = '#ff4757'; }
+            showToast("تم إيقاف الناطق الصوتي 🔇", "warning");
+            window.speechSynthesis.cancel();
         }
     }
 
@@ -2905,15 +2942,20 @@ ${errorDetails}
 
     // ================= نظام الإشعارات الذكي (يدعم الويب والتطبيق معاً) =================
     async function checkPushStatus() {
+        // جلب الزر القديم (للوكيل) والزر الجديد (للعميل)
         let btn = document.getElementById('enable-push-btn');
-        if (!btn) return;
+        let btnBento = document.getElementById('enable-push-btn-bento');
+        let textBento = document.getElementById('push-btn-text');
+
+        // دالة مساعدة لتحديث الزرين معاً
+        let updateButtons = (bg, color, html, text) => {
+            if (btn) { btn.style.background = bg; btn.style.color = color; btn.innerHTML = html; btn.onclick = subscribeToPush; }
+            if (btnBento && textBento) { btnBento.style.background = bg; textBento.innerText = text; }
+        };
 
         // 1. حالة تطبيق الأندرويد (APK)
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-            btn.style.background = '#0ba360';
-            btn.style.color = '#fff';
-            btn.innerHTML = '✅ تفعيل / تحديث إشعارات التطبيق';
-            btn.onclick = subscribeToPush;
+            updateButtons('#0ba360', '#fff', '✅ تفعيل / تحديث إشعارات التطبيق', '✅ تفعيل / تحديث الإشعارات');
             return;
         }
 
@@ -2921,20 +2963,14 @@ ${errorDetails}
         let perm = ('Notification' in window) ? Notification.permission : 'default';
 
         if (perm === 'granted') {
-            btn.style.background = '#0ba360';
-            btn.style.color = '#fff';
-            btn.innerHTML = '✅ الإشعارات مفعلة (اضغط هنا لتحديث الربط)';
-            btn.onclick = subscribeToPush;
+            updateButtons('#0ba360', '#fff', '✅ الإشعارات مفعلة (اضغط هنا لتحديث)', '✅ الإشعارات مفعلة');
         } else if (perm === 'denied') {
-            btn.style.background = '#ff4757';
-            btn.style.color = '#fff';
-            btn.innerHTML = '❌ الإشعارات محظورة من المتصفح';
-            btn.onclick = () => alert("الرجاء الدخول لإعدادات المتصفح والسماح بالإشعارات.");
+            updateButtons('#ff4757', '#fff', '❌ الإشعارات محظورة من المتصفح', '❌ الإشعارات محظورة');
+            let action = () => alert("الرجاء الدخول لإعدادات المتصفح والسماح بالإشعارات.");
+            if (btn) btn.onclick = action;
+            if (btnBento) btnBento.onclick = action;
         } else {
-            btn.style.background = 'linear-gradient(to right, #f5af19, #f12711)';
-            btn.style.color = '#fff';
-            btn.innerHTML = '<i class="fas fa-bell" style="font-size: 18px;"></i> تفعيل إشعارات التطبيق';
-            btn.onclick = subscribeToPush;
+            updateButtons('linear-gradient(to right, #f5af19, #f12711)', '#fff', '<i class="fas fa-bell" style="font-size: 18px;"></i> تفعيل إشعارات التطبيق', 'تفعيل إشعارات التطبيق');
         }
     }
 
@@ -7769,7 +7805,7 @@ async function fetchClientPermission(clientId) {
             switchClientUnifiedTab('client-settings-screen', document.querySelectorAll('#client-floating-dock .dock-item')[2]);
         }
     }
-    
+
     // ================= دوال الإعدادات وضبط المصنع =================
     async function changePin() {
         // 🌟 الإصلاح: التحقق من وجود النافذة قبل إخفائها لمنع الخطأ
@@ -11154,6 +11190,10 @@ class TelecomGateway {
         
         let mainNav = document.getElementById('agent-bottom-nav');
         if(mainNav) mainNav.style.display = 'none';
+        
+        // 🌟 إخفاء المنصة العائمة للعميل عند فتح التسديدات 🌟
+        let floatingDock = document.getElementById('client-floating-dock');
+        if(floatingDock) floatingDock.style.display = 'none';
 
         document.getElementById('telecom-dashboard').style.display = 'block';
         
@@ -11229,9 +11269,16 @@ class TelecomGateway {
 
         if (this.previousDashboard) {
             document.getElementById(this.previousDashboard).style.display = 'block';
+            
             if (typeof userId !== 'undefined' && userId === ADMIN_ID) {
                 let mainNav = document.getElementById('agent-bottom-nav');
                 if(mainNav) mainNav.style.display = 'flex';
+            }
+            
+            // 🌟 استعادة المنصة العائمة للعميل 🌟
+            if (this.previousDashboard === 'client-lobby-screen' || this.previousDashboard === 'client-records-screen' || this.previousDashboard === 'client-settings-screen') {
+                let floatingDock = document.getElementById('client-floating-dock');
+                if(floatingDock) floatingDock.style.display = 'flex';
             }
         }
     }
