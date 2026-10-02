@@ -6592,7 +6592,20 @@ async function fetchClientPermission(clientId) {
                 if (window.promoInterval) clearInterval(window.promoInterval);
             }
 
-            if(data.role === 'client') {
+            // 👇👇 🌟 الحل الجذري: توجيه المدير والوكيل من السيرفر مباشرة 🌟 👇👇
+            if (data.role === 'manager') {
+                applyRoleTheme('manager');
+                document.getElementById('welcome-msg').innerText = getSmartGreeting(data.name + " 👑");
+                showManagerScreen();
+            } 
+            else if (data.role === 'agent') {
+                applyRoleTheme('agent');
+                document.getElementById('welcome-msg').innerText = getSmartGreeting(data.name + " 👨‍💻");
+                showAgentScreen();
+            }
+            // 👆👆 ======================================================= 👆👆
+
+            else if(data.role === 'client') {
                 applyRoleTheme('client');
 
                 // 🌟 إخفاء/إظهار أقسام التسديدات حسب الصلاحية (للتجربة والوكيل فقط) 🌟
