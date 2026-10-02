@@ -2672,23 +2672,24 @@ async function checkForUpdates() {
                     }
                 }
             } else if (action.route === 'pending_orders') {
-            // 🚀 منع فتح الشاشة إذا كان المستخدم قد رفض الطلب بالفعل من الإشعار
-            if (action.actionId === 'reject') {
-                if (typeof showToast === 'function') showToast("✅ تم رفض الطلب بنجاح!", "success");
-            } else {
-                if (typeof viewPendingOrders === 'function') viewPendingOrders();
+                // 🚀 منع فتح الشاشة إذا كان المستخدم قد رفض الطلب بالفعل من الإشعار
+                if (action.actionId === 'reject') {
+                    if (typeof showToast === 'function') showToast("✅ تم رفض الطلب بنجاح!", "success");
+                } else {
+                    if (typeof viewPendingOrders === 'function') viewPendingOrders();
+                }
+            } else if (action.route === 'tickets') {
+                if (typeof viewSupportTickets === 'function') viewSupportTickets();
+            } else if (action.route === 'telecom') {
+                if (typeof telecomApp !== 'undefined') {
+                    let sourceScreen = (currentUserId === ADMIN_ID || currentUserId === MANAGER_ID) ? 'agent-operations-screen' : 'client-lobby-screen';
+                    telecomApp.showDashboard(sourceScreen);
+                }
+            } else if (action.route === 'pos') {
+                if (currentUserId === ADMIN_ID && typeof agentQuickSale === 'function') agentQuickSale();
+                else if (currentUserId > 0 && currentUserId !== MANAGER_ID && typeof openPhysicalApp === 'function') openPhysicalApp();
             }
-        } else if (action.route === 'tickets') {
-            if (typeof viewSupportTickets === 'function') viewSupportTickets();
-        } else if (action.route === 'telecom') {
-            if (typeof telecomApp !== 'undefined') {
-                let sourceScreen = (userId === ADMIN_ID || userId === MANAGER_ID) ? 'agent-operations-screen' : 'client-lobby-screen';
-                telecomApp.showDashboard(sourceScreen);
-            }
-        } else if (action.route === 'pos') {
-            if (userId === ADMIN_ID && typeof agentQuickSale === 'function') agentQuickSale();
-            else if (userId > 0 && userId !== MANAGER_ID && typeof openPhysicalApp === 'function') openPhysicalApp();
-        }
+        }, 300); // 👈👈👈 هذا هو السطر المفقود الذي كان يسبب الكارثة!
     };
 
     // ================= دالة توليد رقم مرجعي فريد لمنع الدفع المزدوج =================
