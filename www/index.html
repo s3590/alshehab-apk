@@ -2642,29 +2642,36 @@ async function checkForUpdates() {
     window.executePendingDeepLink = function() {
         let savedAction = sessionStorage.getItem('pendingDeepLink');
         if (!savedAction) return;
-        if (typeof userId === 'undefined' || userId === 0) return; 
+        
+        // 🌟 الإصلاح: التأكد من جلب الآيدي بشكل موثوق حتى لو كانت الصفحة للتو تحملت
+        let currentUserId = (typeof userId !== 'undefined' && userId > 0) ? userId : parseInt(localStorage.getItem('saved_user_id') || 0);
+        if (currentUserId === 0) return; 
 
         let action = JSON.parse(savedAction);
         sessionStorage.removeItem('pendingDeepLink'); 
 
+        // إغلاق أي نوافذ مفتوحة لضمان عدم التداخل
         document.querySelectorAll('.modal').forEach(m => {
             if (m.id !== 'lock-screen' && m.id !== 'force-update-screen') {
                 m.style.display = 'none';
             }
         });
 
-        if (action.route === 'chat') {
-            // 🚀 منع الانبثاق المزدوج إذا كان المستخدم قد رد بالفعل من الإشعار
-            if (action.actionId === 'reply') {
-                if (typeof showToast === 'function') showToast("✅ تم إرسال ردك السريع بنجاح!", "success");
-            } else {
-                if (userId === ADMIN_ID && action.client_id) {
-                    if (typeof adminQuickReplyToClient === 'function') adminQuickReplyToClient(action.client_id);
-                } else if (typeof openChat === 'function') {
-                    openChat();
+        // 🌟 الإصلاح: تأخير بسيط جداً لضمان اختفاء شاشة التحميل قبل إظهار النافذة المنبثقة
+        setTimeout(() => {
+            if (action.route === 'chat') {
+                if (action.actionId === 'reply') {
+                    if (typeof showToast === 'function') showToast("✅ تم إرسال ردك السريع بنجاح!", "success");
+                } else {
+                    // 🌟 الإصلاح الجذري: تحويل client_id إلى رقم (Integer) لكي تقبله الدالة
+                    let targetClientId = parseInt(action.client_id);
+                    if (currentUserId === ADMIN_ID && targetClientId) {
+                        if (typeof adminQuickReplyToClient === 'function') adminQuickReplyToClient(targetClientId);
+                    } else if (typeof openChat === 'function') {
+                        openChat();
+                    }
                 }
-            }
-        } else if (action.route === 'pending_orders') {
+            } else if (action.route === 'pending_orders') {
             // 🚀 منع فتح الشاشة إذا كان المستخدم قد رفض الطلب بالفعل من الإشعار
             if (action.actionId === 'reject') {
                 if (typeof showToast === 'function') showToast("✅ تم رفض الطلب بنجاح!", "success");
