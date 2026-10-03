@@ -7056,6 +7056,81 @@ async function fetchClientPermission(clientId) {
         return deviceId;
     }
 
+               // ===============================================================
+        // 🚀 نظام الدخول السلس والموحد (SSO) من تطبيق دكاني
+        // ===============================================================
+        async function checkSSOLogin() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ssoToken = urlParams.get('sso_token');
+            
+            if (ssoToken) {
+                // 1. إيقاف وإخفاء شاشة الدخول والبصمة فوراً بقوة!
+                let loginScreen = document.getElementById('login-screen');
+                if (loginScreen) loginScreen.style.display = 'none !important';
+                
+                // إظهار شاشة التحميل فقط لكي لا يرى المستخدم أي تشتت
+                let splash = document.getElementById('splash-screen');
+                if (splash) {
+                    splash.style.display = 'flex';
+                    splash.style.opacity = '1';
+                    splash.style.zIndex = '9999999';
+                }
+
+                try {
+                    let res = await fetch('/api/b2b/sso_login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sso_token: ssoToken })
+                    });
+                    let data = await res.json();
+                    
+                    if (data.status === 'success') {
+                        // حفظ الجلسة الدائمة
+                        localStorage.setItem('auth_token', data.token);
+                        localStorage.setItem('user_role', data.role);
+                        localStorage.setItem('telegram_id', data.telegram_id);
+                        localStorage.setItem('user_name', data.name);
+                        
+                        // مسح التوكن من الرابط نهائياً لحمايته
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        
+                        // إعادة تحميل الصفحة للدخول كالسحر
+                        window.location.reload();
+                        return true; // نجاح الـ SSO
+                    } else {
+                        showToast("❌ " + data.message, false);
+                    }
+                } catch (e) {
+                    showToast("❌ خطأ في الاتصال بالبوابة", false);
+                }
+            }
+            return false; // لا يوجد SSO
+        }
+        
+        // 👇 التعديل الأهم: اعتراض التشغيل لمنع البصمة من الظهور 👇
+        // ابحث عن document.addEventListener('DOMContentLoaded' ... القديمة واحذفها إن وجدت
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            // إذا كان هناك توكن، نوقف كل شيء ونشغل الـ SSO فقط!
+            if (urlParams.get('sso_token')) {
+                await checkSSOLogin();
+            } else {
+                // إذا لم يكن هناك توكن، نشغل النظام العادي (بصمة، شاشة ترحيب، إلخ)
+                // تأكد أن الدوال الأساسية الخاصة بك (مثل تطبيق المظهر) تعمل هنا
+                if(typeof applyDarkMode === 'function') applyDarkMode();
+                if(typeof applyBioMode === 'function') applyBioMode();
+                
+                // إخفاء شاشة التحميل بعد ثانيتين كما هو معتاد في الشهاب
+                setTimeout(() => {
+                    let splash = document.getElementById('splash-screen');
+                    if(splash) {
+                        splash.style.opacity = '0';
+                        setTimeout(() => { splash.style.display = 'none'; }, 500);
+                    }
+                }, 2000);
+            }
+        });
+
     // ================= دالة تسجيل الدخول المباشر والآمن (مع بصمة الهاتف) =================
     async function loginClient() {
         let accountId = await smartDialog({
