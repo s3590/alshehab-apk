@@ -7077,7 +7077,8 @@ async function fetchClientPermission(clientId) {
                 }
 
                 try {
-                    let res = await fetch('/api/b2b/sso_login', {
+                    // 🌟 التعديل: إضافة SERVER_URL لكي يعمل الربط بنجاح من داخل تطبيق الهاتف (APK)
+                    let res = await fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/b2b/sso_login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sso_token: ssoToken })
@@ -9557,7 +9558,7 @@ async function giveCardsToClient() {
         let clientId = await smartSelect("اختر البقالة", clientsList);
         if (!clientId) return;
 
-        // 🌟 2. جلب بيانات العميل (دعم الأوفلاين)
+        // ?? 2. جلب بيانات العميل (دعم الأوفلاين)
         showToast("⏳ جاري فحص حساب العميل...", "warning");
         let userData;
         if (navigator.onLine) {
