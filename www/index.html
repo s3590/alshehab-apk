@@ -2741,12 +2741,9 @@ async function checkForUpdates() {
     document.addEventListener('click', unlockAudioEngine);
     document.addEventListener('touchstart', unlockAudioEngine, {passive: true});
 
-    // 2. دالة النطق المحسنة
-        // ================= دالة النطق المحسنة (باللغة العربية الفصحى) =================
-    function speakArabic(text) {
-        if (!isVoiceEnabled || !('speechSynthesis' in window)) return;
-
-        window.speechSynthesis.cancel(); // إيقاف أي نطق سابق
+    // 2. دالة النطق المحسنة (باللغة العربية الفصحى)
+    async function speakArabic(text) {
+        if (!isVoiceEnabled) return;
 
         // 🌟 فلتر الذكاء اللغوي: تحويل النص العادي إلى فصحى مشكّلة 🌟
         let formalText = text;
@@ -2774,29 +2771,47 @@ async function checkForUpdates() {
 
         console.log("النص الموجه للناطق:", formalText); // للتأكد من النص في الكونسول
 
-        let utterance = new SpeechSynthesisUtterance(formalText);
-        utterance.lang = 'ar-SA'; // نطق بلهجة سعودية/عربية فصحى
-        utterance.rate = 0.85;    // إبطاء السرعة قليلاً لتبدو رسمية وواضحة
-        utterance.pitch = 1.0;    
-        utterance.volume = 1.0;
-
-                     // تحديث: جلب الأصوات بشكل آمن يدعم الجوالات
-        let voices = window.speechSynthesis.getVoices();
-        
-        const setVoiceAndSpeak = () => {
-            voices = window.speechSynthesis.getVoices();
-            if(voices.length > 0) {
-                let arabicVoice = voices.find(v => v.lang.includes('ar') && (v.name.includes('Majed') || v.name.includes('Tarik') || v.name.includes('Male')));
-                if (!arabicVoice) arabicVoice = voices.find(v => v.lang.includes('ar'));
-                if (arabicVoice) utterance.voice = arabicVoice;
+        // 🌟 السحر هنا: استخدام محرك الهاتف الأصلي إذا كان تطبيق APK 🌟
+        if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.TextToSpeech) {
+            try {
+                const { TextToSpeech } = window.Capacitor.Plugins;
+                await TextToSpeech.stop(); // إيقاف أي نطق سابق
+                await TextToSpeech.speak({
+                    text: formalText,
+                    lang: 'ar-SA',
+                    rate: 0.85,
+                    pitch: 1.0,
+                    volume: 1.0
+                });
+            } catch (e) {
+                console.log("Native TTS Error:", e);
             }
-            window.speechSynthesis.speak(utterance);
-        };
+        } 
+        // 🌟 أما إذا كان متصفح ويب عادي، نستخدم محرك المتصفح 🌟
+        else if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); 
+            let utterance = new SpeechSynthesisUtterance(formalText);
+            utterance.lang = 'ar-SA'; 
+            utterance.rate = 0.85;    
+            utterance.pitch = 1.0;    
+            utterance.volume = 1.0;
 
-        if (voices.length === 0) {
-            window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
-        } else {
-            setVoiceAndSpeak();
+            let voices = window.speechSynthesis.getVoices();
+            const setVoiceAndSpeak = () => {
+                voices = window.speechSynthesis.getVoices();
+                if(voices.length > 0) {
+                    let arabicVoice = voices.find(v => v.lang.includes('ar') && (v.name.includes('Majed') || v.name.includes('Tarik') || v.name.includes('Male')));
+                    if (!arabicVoice) arabicVoice = voices.find(v => v.lang.includes('ar'));
+                    if (arabicVoice) utterance.voice = arabicVoice;
+                }
+                window.speechSynthesis.speak(utterance);
+            };
+
+            if (voices.length === 0) {
+                window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
+            } else {
+                setVoiceAndSpeak();
+            }
         }     
     }
 
@@ -2818,7 +2833,13 @@ async function checkForUpdates() {
             if (icon) { icon.className = 'fas fa-toggle-off'; icon.style.color = '#ff4757'; }
             if (iconBento) { iconBento.className = 'fas fa-toggle-off'; iconBento.style.color = '#ff4757'; }
             showToast("تم إيقاف الناطق الصوتي 🔇", "warning");
-            window.speechSynthesis.cancel();
+            
+            // 🌟 إيقاف النطق حسب نوع المنصة لمنع الانهيار
+            if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.TextToSpeech) {
+                window.Capacitor.Plugins.TextToSpeech.stop().catch(e => {});
+            } else if ('speechSynthesis' in window && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
         }
     }
 
