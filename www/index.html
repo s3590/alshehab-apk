@@ -2449,7 +2449,7 @@ async function checkForUpdates() {
         }
     }
 
-    async function executeForceUpdate() {
+    async function executeForceUpdate() {           
         let btn = document.querySelector('#force-update-screen button');
         let progressContainer = document.getElementById('update-progress-container');
         let progressBar = document.getElementById('update-progress-bar');
@@ -2482,11 +2482,11 @@ async function checkForUpdates() {
                     }
                 });
 
-                // 🌟 الإصلاح الجذري: حفظ الملف في DATA بدلاً من CACHE لكي يستطيع مثبت الأندرويد قراءته
+                // 🌟 الحل الجذري: استخدام CACHE لأنه مسموح بمشاركته مع مثبت نظام الأندرويد
                 const response = await Filesystem.downloadFile({
                     url: apkUrl,
                     path: 'Alshehab-Update.apk',
-                    directory: 'DATA', 
+                    directory: 'CACHE', 
                     progress: true
                 });
                 
@@ -2494,14 +2494,14 @@ async function checkForUpdates() {
                 
                 setTimeout(async () => {
                     try {
-                        // 🌟 الإصلاح: تمرير المسار الصافي فقط
+                        // 🌟 طلب فتح ملف الـ APK لتثبيته فوراً من داخل التطبيق
                         await FileOpener.openFile({
                             path: response.path, 
                             mimeType: 'application/vnd.android.package-archive'
                         });
                     } catch (openErr) {
                         console.error("FileOpener Error:", openErr);
-                        // طوارئ: إذا فشل الفتح الداخلي، نفتح الرابط في المتصفح
+                        // طوارئ: إذا فشل الأندرويد في فتح النافذة
                         window.open(apkUrl, '_system');
                     }
                 }, 500);
@@ -2524,6 +2524,7 @@ async function checkForUpdates() {
                 }, 1500);
             }
         } else {
+            // إذا كان يفتح من المتصفح العادي أو انتهى التحديث
             window.location.replace(window.location.origin + "/?v=" + new Date().getTime());
         }
     }
