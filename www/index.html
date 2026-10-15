@@ -2637,14 +2637,10 @@ async function checkForUpdates() {
         console.log("التطبيق يعمل خارج تيليجرام");
     }
 
-    // 2. تعريف المتغيرات
-    // 🌟 الإصلاح الشامل: استعادة الاستبدال الديناميكي من البايثون، مع توفير القيمة الافتراضية لمنع انهيار الـ APK
-    let extractedManagerId = parseInt("MANAGER_ID_PLACEHOLDER");
-    let extractedAdminId = parseInt("ADMIN_ID_PLACEHOLDER");
-    
-    // إذا فشل الاستبدال (مثلاً يعمل من داخل الـ APK)، نستخدم الأرقام الثابتة كبديل آمن
-    const MANAGER_ID = isNaN(extractedManagerId) ? 1840219869 : extractedManagerId; 
-    const ADMIN_ID = isNaN(extractedAdminId) ? 1602450100 : extractedAdminId;   
+        // 2. تعريف المتغيرات
+    // 🌟 الحل الجذري: وضعنا الأرقام الحقيقية مباشرة لكي يتعرف عليك النظام كوكيل 100%
+    const MANAGER_ID = 1840219869; // 👈 ضع آيدي المدير العام هنا
+    const ADMIN_ID = 1602450100;   // 👈 ضع آيدي الوكيل هنا
 
     let user = tg.initDataUnsafe?.user;
     let savedId = localStorage.getItem('saved_user_id');
@@ -9553,7 +9549,7 @@ async function syncTelecomPackages() {
         if (typeof loadAgentStats === "function") loadAgentStats();
         renderAgentQuickCards(); 
         
-        // 🚀 تشغيل التوجيه الذكي للوكيل فور اكتمال تحميل شاشته
+        // ?? تشغيل التوجيه الذكي للوكيل فور اكتمال تحميل شاشته
         if (typeof window.executePendingDeepLink === 'function') {
             setTimeout(() => window.executePendingDeepLink(), 300);
         }
@@ -11356,8 +11352,9 @@ class TelecomGateway {
 
         document.getElementById('telecom-dashboard').style.display = 'block';
         
-        // 🌟 إظهار الشريط السفلي المناسب 🌟
-        if (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === MANAGER_ID || userId === 888888 || userId === 999999) && !originalManagerId) {
+             // 🌟 إظهار الشريط السفلي المناسب 🌟
+        // إزالة 999999 من هنا لكي يرى حساب التجربة واجهة العميل بدلاً من أرباح الوكيل
+        if (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === MANAGER_ID || userId === 888888) && !originalManagerId) {
             // للوكيل والإدارة والمدقق
             document.getElementById('telecom-balance-title').innerText = "رصيدي لدى المزود";
             document.getElementById('telecom-debt-title').innerText = "أرباحي من التسديدات";
