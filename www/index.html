@@ -2449,7 +2449,7 @@ async function checkForUpdates() {
         }
     }
 
-    async function executeForceUpdate() {           
+        async function executeForceUpdate() {           
         let btn = document.querySelector('#force-update-screen button');
         let progressContainer = document.getElementById('update-progress-container');
         let progressBar = document.getElementById('update-progress-bar');
@@ -2466,7 +2466,7 @@ async function checkForUpdates() {
 
         const apkUrl = "https://github.com/s3590/alshehab-apk/releases/latest/download/Alshehab-Pro.apk";
 
-        if (window.Capacitor && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.FileOpener ) {
+        if (window.Capacitor && window.Capacitor.Plugins.Filesystem ) {
             btn.style.display = 'none';
             progressContainer.style.display = 'block';
             
@@ -2482,35 +2482,47 @@ async function checkForUpdates() {
                     }
                 });
 
-                // 🌟 الحل الجذري: استخدام CACHE لأنه مسموح بمشاركته مع مثبت نظام الأندرويد
+                // 🌟 إضافة رقم عشوائي لاسم الملف لمنع الأندرويد من فتح نسخة قديمة مخزنة بالكاش
+                const uniqueFileName = 'Alshehab-Update-' + Date.now() + '.apk';
+
                 const response = await Filesystem.downloadFile({
                     url: apkUrl,
-                    path: 'Alshehab-Update.apk',
+                    path: uniqueFileName,
                     directory: 'CACHE', 
                     progress: true
                 });
                 
                 progressText.innerText = "جاري فتح نافذة التثبيت...";
                 
+                // 🌟 زيادة التأخير لـ 1000 ملي ثانية لضمان اكتمال حفظ الملف في ذاكرة الهاتف
                 setTimeout(async () => {
                     try {
-                        // 🌟 طلب فتح ملف الـ APK لتثبيته فوراً من داخل التطبيق
-                        await FileOpener.openFile({
-                            path: response.path, 
-                            mimeType: 'application/vnd.android.package-archive'
-                        });
+                        if (FileOpener) {
+                            // 🌟 السحر هنا: استخدام response.url (الذي يبدأ بـ file://) بدلاً من response.path
+                            await FileOpener.openFile({
+                                path: response.url || response.path, 
+                                mimeType: 'application/vnd.android.package-archive'
+                            });
+                        } else {
+                            throw new Error("إضافة FileOpener غير موجودة");
+                        }
                     } catch (openErr) {
                         console.error("FileOpener Error:", openErr);
-                        // طوارئ: إذا فشل الأندرويد في فتح النافذة
-                        window.open(apkUrl, '_system');
+                        
+                        // 🌟 محاولة أخيرة لفتح الملف محلياً من داخل النظام قبل الذهاب للمتصفح
+                        try {
+                            window.location.href = response.url;
+                        } catch (fallbackErr) {
+                            window.open(apkUrl, '_system');
+                        }
                     }
-                }, 500);
+                }, 1000);
 
                 setTimeout(() => {
                     btn.style.display = 'block';
                     btn.innerHTML = '<i class="fas fa-sync-alt"></i> حاول التثبيت مجدداً';
                     progressContainer.style.display = 'none';
-                }, 3000);
+                }, 4000);
 
             } catch (e) {
                 console.error("In-App Update Error:", e);
@@ -2626,9 +2638,13 @@ async function checkForUpdates() {
     }
 
     // 2. تعريف المتغيرات
-    // 🌟 الحل الجذري: وضعنا الأرقام الحقيقية مباشرة لكي لا نعتمد على سيرفر البناء
-    const MANAGER_ID = 1840219869; // 👈 امسح هذا الرقم وضع آيدي المدير العام (الشيخ رهيب)
-    const ADMIN_ID = 1602450100;   // 👈 امسح هذا الرقم وضع آيدي الوكيل (وليد)
+    // 🌟 الإصلاح الشامل: استعادة الاستبدال الديناميكي من البايثون، مع توفير القيمة الافتراضية لمنع انهيار الـ APK
+    let extractedManagerId = parseInt("MANAGER_ID_PLACEHOLDER");
+    let extractedAdminId = parseInt("ADMIN_ID_PLACEHOLDER");
+    
+    // إذا فشل الاستبدال (مثلاً يعمل من داخل الـ APK)، نستخدم الأرقام الثابتة كبديل آمن
+    const MANAGER_ID = isNaN(extractedManagerId) ? 1840219869 : extractedManagerId; 
+    const ADMIN_ID = isNaN(extractedAdminId) ? 1602450100 : extractedAdminId;   
 
     let user = tg.initDataUnsafe?.user;
     let savedId = localStorage.getItem('saved_user_id');
@@ -8214,10 +8230,13 @@ async function fetchClientPermission(clientId) {
     const PARTICLE_FRAME_INTERVAL = 1000 / 30; // 30 إطار/ثانية كافية بصرياً وأخف على المعالج
 
     function animateParticles(timestamp) {
+        // إيقاف الرسم تماماً إذا كان المستخدم يفضل تقليل الحركة أو الهاتف في وضع التيربو (الأجهزة الضعيفة)
+        if (prefersReducedMotion || document.body.classList.contains('lite-mode')) return;
+
         requestAnimationFrame(animateParticles);
 
-        // إيقاف الرسم تماماً إذا كان التبويب غير ظاهر أو المستخدم يفضل تقليل الحركة
-        if (document.hidden || prefersReducedMotion) return;
+        // 🌟 الإصلاح الأمني للأداء: إيقاف المعالجة تماماً إذا كان التطبيق في الخلفية لإنقاذ البطارية!
+        if (document.hidden) return;
 
         if (!lastParticleFrame) lastParticleFrame = timestamp;
         if (timestamp - lastParticleFrame < PARTICLE_FRAME_INTERVAL) return;
@@ -8308,7 +8327,9 @@ async function fetchClientPermission(clientId) {
 
     // دالة الوكيل لتعديل السقف (مع الحارس الأمني)
     async function manageCreditLimits() {
-        document.getElementById('settingsModal').style.display = 'none';
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
+
         let res = await safeGet('/api/network_data');
         let data = await res.json();
         let clientsList = data.clients.map(c => ({ 
@@ -8371,15 +8392,18 @@ async function fetchClientPermission(clientId) {
     }
 
     async function agentBroadcast() {
-        document.getElementById('settingsModal').style.display = 'none';
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
+
         let msg = await smartDialog({ type: 'prompt', title: 'تعميم للعملاء', message: 'اكتب الرسالة لجميع البقالات:', icon: 'fa-bullhorn', color: '#00d2ff', inputType: 'text' });
         if (!msg) return;
         let fd = new FormData(); fd.append('message', msg);
         await executeApiAction('/api/agent_broadcast', fd, "⏳ جاري الإرسال...");
     }
-    
+
     function manageOfflineClients() { 
-        document.getElementById('settingsModal').style.display = 'none';
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
         switchScreen('offline-clients-screen'); 
     }
 
@@ -8427,7 +8451,9 @@ async function fetchClientPermission(clientId) {
     }
 
     async function viewSupportTickets() {
-        document.getElementById('settingsModal').style.display = 'none';
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
+
         showToast("⏳ جاري جلب التذاكر...", "warning");
         try {
             let res = await safeGet('/api/get_tickets');
@@ -8456,7 +8482,9 @@ async function fetchClientPermission(clientId) {
 
     // ================= أداة ضبط الصحون (استخدام الـ GPS) =================
     async function alignDishTool() {
-        document.getElementById('settingsModal').style.display = 'none';
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
+
         let confirm = await smartDialog({
             type: 'confirm', title: 'أداة ضبط الصحون', message: 'سيتم استخدام الـ GPS لتحديد موقعك الحالي (البرج). هل توافق؟',
             icon: 'fa-satellite-dish', color: '#3cbab2'
@@ -8471,7 +8499,9 @@ async function fetchClientPermission(clientId) {
                         let lon = position.coords.longitude;
                         smartDialog({
                             type: 'alert', title: 'تم تحديد البرج', 
-                            message: `تم حفظ الإحداثيات:<br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}<br><br>اذهب الآن لموقع العميل وافتح الأداة مرة أخرى.`,
+                            message: `تم حفظ الإحداثيات:  
+Lat: ${lat.toFixed(4)}  
+Lon: ${lon.toFixed(4)}    اذهب الآن لموقع العميل وافتح الأداة مرة أخرى.`,
                             icon: 'fa-check-circle', color: '#3cbab2'
                         });
                     },
@@ -9460,8 +9490,9 @@ async function syncTelecomPackages() {
     // دوال الإعدادات
     function togglePrivacy(type) { showToast("يرجى تعديل إعدادات الخصوصية من البوت في تليجرام.", "warning"); }
     
-        async function manageCardTypes() { 
-        document.getElementById('settingsModal').style.display = 'none';
+    async function manageCardTypes() { 
+        let sModal = document.getElementById('settingsModal');
+        if(sModal) sModal.style.display = 'none';
         
         showToast("⏳ جاري جلب الفئات...", "warning");
         try {
@@ -9617,15 +9648,24 @@ async function giveCardsToClient() {
                         if (rem === null) return showToast("تم إلغاء العملية", "error");
 
                         let remQty = parseInt(rem);
-                        if (remQty < item.quantity) {
-                            let soldQty = item.quantity - remQty;
+                        // 🌟 التوحيد الشامل: معالجة الزيادة والنقص عبر المحرك المحاسبي المركزي 🌟
+                        if (remQty !== item.quantity) {
                             let fdPos = new FormData();
                             fdPos.append('client_id', clientId);
                             fdPos.append('card_type', item.card_type);
-                            fdPos.append('quantity', soldQty);
-                            fdPos.append('sale_type', 'credit');
-                            fdPos.append('customer_name', 'مبيعات جرد آلي');
-                            await safeFetch('/api/client_pos_sell', fdPos);
+                            fdPos.append('expected_qty', item.quantity);
+                            fdPos.append('actual_remaining_qty', remQty);
+                            
+                            let adjRes = await safeFetch('/api/record_client_sale', fdPos);
+                            
+                            if (adjRes.status === 'success' && adjRes.adjustment_msg) {
+                                await smartDialog({
+                                    type: 'alert', title: '⚠️ تسوية جرد آلية',
+                                    message: adjRes.adjustment_msg, icon: 'fa-robot', color: '#f5af19'
+                                });
+                            } else if (adjRes.status === 'error') {
+                                return showToast(adjRes.message, "error");
+                            }
                         }
                     }
                 }
@@ -12716,7 +12756,7 @@ function clearAppBadge() {
                     <div id="packages-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; padding-bottom: 20px;"></div>
                 </div>
             </div>
-        </div> <!-- 🟢 هذا هو الـ div المفقود الذي يجب إضافته هنا 🟢 -->
+        <!-- 🌟 تم إزالة الـ div الزائد هنا لتبقى الأقسام التالية داخل حاوية telecom-dashboard بشكل سليم 🌟 -->
 
     <!-- ================= 2. قسم العملاء (للوكيل فقط) ================= -->
     <div id="telecom-view-clients" class="telecom-view" style="display: none;">
@@ -13625,12 +13665,17 @@ function performGlobalSearch() {
                 let color = isCredit ? '#38ef7d' : '#ff4757';
                 let sign = isCredit ? '+' : '-';
                 
+                // 🌟 الإصلاح الأمني (XSS Protection): تعقيم تفاصيل العملية لمنع حقن أي كود خبيث!
+                let safe_details = escapeHTML(tx.details || '');
+                let safe_type = escapeHTML(tx.type || '');
+                
                 html += `<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 8px; border-right: 3px solid ${color};">
                     <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                         <strong style="color:${color};">${sign} ${tx.amount} ريال</strong>
                         <small style="color:#aaa;">${tx.date}</small>
                     </div>
-                    <div style="color:#ddd;">${tx.details}</div>
+                    <div style="color:#00d2ff; font-size:10px; margin-bottom:3px;">[${safe_type}]</div>
+                    <div style="color:#ddd; font-size:12px;">${safe_details}</div>
                 </div>`;
             });
         }
