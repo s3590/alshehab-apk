@@ -21,9 +21,14 @@ importScripts(
 );
 
 const SERVER_URL = 'https://my-bot-ehio.onrender.com';
-const CACHE_VERSION = 'CACHE_VERSION_PLACEHOLDER';
+const CACHE_VERSION = 'v1.0.1'; // 👈 تم تثبيت إصدار الكاش ليعمل فوراً
 const CACHE_NAME = `shehab-offline-${CACHE_VERSION}`;
 const FCM_SDK_VERSION = '8.10.1';
+
+// 🌟 [إصلاح حاسم] تعريف المتغيرات التي كان غيابها يكسر عمل السيرفيس وركر والإشعارات
+const APP_ORIGIN = self.location.origin;
+const LOGO_URL = '/static/logo.png';
+const APP_SHELL_URL = '/';
 
 firebase.initializeApp({
   apiKey: 'AIzaSyBBYxCDcGilfl_xAiAFzaYH-G-7L_jR7Zo',
@@ -88,13 +93,18 @@ function isApiRequest(request) {
 }
 
 function isCacheableResponse(response) {
-  // 🌟 التعديل: السماح بالاستجابات الناجحة (200) أو العابرة للنطاقات (Opaque/CORS) لكي تظهر الصور في تطبيق الأندرويد
-  return Boolean(
-    response &&
-      (response.ok || response.status === 0 || response.status === 200) &&
-      (response.type === 'basic' || response.type === 'default' || response.type === 'cors' || response.type === 'opaque') &&
-      !response.headers.has('set-cookie')
-  );
+  // 🌟 حماية إضافية: استجابات الـ opaque لا تملك headers متاحة، لذا نفحصها بأمان تام
+  if (!response) return false;
+  const isOkStatus = response.ok || response.status === 0 || response.status === 200;
+  const isAllowedType = response.type === 'basic' || response.type === 'default' || response.type === 'cors' || response.type === 'opaque';
+  
+  if (!isOkStatus || !isAllowedType) return false;
+  
+  try {
+    return !response.headers.has('set-cookie');
+  } catch (_) {
+    return true; // إذا كان نوع الاستجابة opaque ولا يسمح بقراءة headers نقبله للكاش
+  }
 }
 
 function normaliseString(value, fallback = '') {
@@ -269,9 +279,13 @@ self.addEventListener('notificationclick', (event) => {
       }
     }
 
-    // 2. إذا كان التطبيق مغلقاً تماماً (Cold Start)، نفتح نافذة جديدة بالرابط المجهز
+    // 2. إذا كان التطبيق مغلقاً تماماً (Cold Start)، نفتح نافذة جديدة بالرابط المجهز بأمان
     if (self.clients.openWindow) {
-      await self.clients.openWindow(targetUrl);
+      try {
+        await self.clients.openWindow(targetUrl);
+      } catch (e) {
+        console.warn('[SW] Could not open window:', e);
+      }
     }
   })());
 });
