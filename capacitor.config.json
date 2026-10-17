@@ -2,9 +2,19 @@
   "appId": "com.alshehab.pro",
   "appName": "الشهاب Pro",
   "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "my-bot-ehio.onrender.com",
+      "*.onrender.com",
+      "github.com",
+      "*.github.com",
+      "*.githubusercontent.com"
+    ]
+  },
   "plugins": {
     "CapacitorHttp": {
-      "enabled": true
+      "enabled": false
     },
     "PushNotifications": {
       "presentationOptions": [
@@ -22,6 +32,7 @@
     }
   },
   "android": {
-    "appendUserAgent": "AlshehabAPK"
+    "appendUserAgent": "AlshehabAPK",
+    "allowMixedContent": true
   }
 }
