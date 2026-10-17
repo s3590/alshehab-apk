@@ -2470,7 +2470,7 @@ async function checkForUpdates() {
 
         localStorage.setItem('is_force_updating', 'true');
 
-        // مسح الكاش القديم لضمان عمل التحديث بشكل نظيف
+        // مسح الكاش القديم
         if ('caches' in window) {
             caches.keys().then(names => {
                 for (let name of names) caches.delete(name);
@@ -2479,74 +2479,94 @@ async function checkForUpdates() {
 
         const apkUrl = "https://github.com/s3590/alshehab-apk/releases/latest/download/Alshehab-Pro.apk";
 
-        if (window.Capacitor && window.Capacitor.Plugins.Filesystem ) {
+        // التحقق من العمل داخل تطبيق الأندرويد
+        if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Filesystem) {
             btn.style.display = 'none';
             progressContainer.style.display = 'block';
+            progressText.innerText = "جاري الاتصال والتحميل...";
             
             try {
-                const { Filesystem, FileOpener } = window.Capacitor.Plugins;
+                const { Filesystem, FileOpener, Browser } = window.Capacitor.Plugins;
                 
-                await Filesystem.addListener('progress', (progress) => {
-                    if (progress.contentLength > 0) {
-                        let percent = Math.round((progress.bytes / progress.contentLength) * 100);
-                        if (percent > 100) percent = 100;
-                        progressBar.style.width = percent + '%';
-                        progressText.innerText = percent + '%';
-                    }
-                });
+                // الاستماع لمستوى التحميل
+                try {
+                    await Filesystem.addListener('progress', (progress) => {
+                        if (progress.contentLength > 0) {
+                            let percent = Math.round((progress.bytes / progress.contentLength) * 100);
+                            if (percent > 100) percent = 100;
+                            progressBar.style.width = percent + '%';
+                            progressText.innerText = percent + '%';
+                        }
+                    });
+                } catch(e) {}
 
-                // 🌟 إضافة رقم عشوائي لاسم الملف لمنع الأندرويد من فتح نسخة قديمة مخزنة بالكاش
-                const uniqueFileName = 'Alshehab-Update-' + Date.now() + '.apk';
+                const fileName = 'Alshehab-Pro-Update.apk';
 
-                const response = await Filesystem.downloadFile({
+                // 🌟 1. حفظ الملف في مجلد DOCUMENTS لكي يمتلك مثبت الأندرويد صلاحية قراءته
+                const downloadResult = await Filesystem.downloadFile({
                     url: apkUrl,
-                    path: uniqueFileName,
-                    directory: 'CACHE', 
+                    path: fileName,
+                    directory: 'DOCUMENTS', 
                     progress: true
                 });
                 
-                progressText.innerText = "جاري فتح نافذة التثبيت...";
-                
-                // 🌟 فتح نافذة التثبيت بنظام الأندرويد الأصلي مع معالجة أذونات التثبيت
+                progressText.innerText = "جاري فتح نافذة التثبيت الآن...";
+                progressBar.style.width = '100%';
+
+                // 🌟 2. استخراج مسار الـ URI النظامي الموثق من FileProvider
+                const fileUriObj = await Filesystem.getUri({
+                    path: fileName,
+                    directory: 'DOCUMENTS'
+                });
+
+                const targetPath = fileUriObj.uri || downloadResult.path;
+
+                // 🌟 3. إطلاق شاشة تثبيت الهاتف فوراً بطلب نظامي
                 setTimeout(async () => {
                     try {
-                        if (window.Capacitor.Plugins.FileOpener) {
-                            const { FileOpener } = window.Capacitor.Plugins;
-                            
-                            // نستخدم response.path الحقيقي لكي يقبله مثبت حزم الأندرويد
+                        if (FileOpener) {
                             await FileOpener.openFile({
-                                path: response.path, 
+                                path: targetPath, 
                                 mimeType: 'application/vnd.android.package-archive'
                             });
                         } else {
-                            throw new Error("FileOpener plugin missing");
+                            throw new Error("FileOpener غير موجود");
                         }
                     } catch (openErr) {
-                        console.error("FileOpener Failed, fallback to browser:", openErr);
-                        // 🌟 إذا رفض الأندرويد فتح النافذة الداخلية بسبب نقص الأذونات، نفتحه فوراً في متصفح النظام ليثبته المستخدم بضغطة زر
-                        window.open(apkUrl, '_system');
+                        console.error("فشل الفتح الداخلي، جاري التحويل للمتصفح:", openErr);
+                        // خطة الطوارئ المضمونة: فتح المتصفح الخارجي للنظام
+                        if (Browser) {
+                            await Browser.open({ url: apkUrl });
+                        } else {
+                            window.open(apkUrl, '_blank');
+                        }
                     }
-                }, 800);
+                }, 500);
 
                 setTimeout(() => {
                     btn.style.display = 'block';
-                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> حاول التثبيت مجدداً';
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> تثبيت التحديث';
                     progressContainer.style.display = 'none';
-                }, 4000);
+                }, 3500);
 
             } catch (e) {
-                console.error("In-App Update Error:", e);
+                console.error("خطأ أثناء تنزيل التحديث:", e);
                 progressText.innerText = "جاري التحويل للمتصفح...";
                 progressBar.style.background = "#f5af19";
                 
-                setTimeout(() => {
-                    window.open(apkUrl, '_system');
+                setTimeout(async () => {
+                    const Browser = window.Capacitor.Plugins.Browser;
+                    if (Browser) {
+                        await Browser.open({ url: apkUrl });
+                    } else {
+                        window.open(apkUrl, '_blank');
+                    }
                     btn.style.display = 'block';
                     progressContainer.style.display = 'none';
-                }, 1500);
+                }, 1000);
             }
         } else {
-            // إذا كان يفتح من المتصفح العادي أو انتهى التحديث
+            // للمتصفح العادي
             window.location.replace(window.location.origin + "/?v=" + new Date().getTime());
         }
     }
