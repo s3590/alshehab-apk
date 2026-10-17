@@ -278,13 +278,23 @@ jobs:
             sed -i -E "s/versionName[[:space:]]+\"[^\"]+\"/versionName \"1.0.${RUN_NUMBER}\"/g" android/app/build.gradle || true
           fi
 
-          # إضافة الصلاحيات كل واحدة على حدة لضمان إضافتها
+          # 🌟 إضافة الصلاحيات الأساسية وصلاحيات تثبيت الحزم وقراءة ملفات التحديث
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>|' "$MANIFEST"
           fi
 
           if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
             sed -i 's|</manifest>|    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>|' "$MANIFEST"
+          fi
+
+          # 🌟 [الحل السحري] صلاحية فتح نافذة تثبيت التحديثات الخارجية تلقائياً في أندرويد
+          if ! grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' "$MANIFEST"; then
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>|' "$MANIFEST"
+          fi
+
+          # 🌟 صلاحية قراءة ملف التحديث المنزّل لتشغيل نافذة التثبيت
+          if ! grep -q 'android.permission.READ_EXTERNAL_STORAGE' "$MANIFEST"; then
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n</manifest>|' "$MANIFEST"
           fi
 
           # إضافة metadata للاختصارات قبل إغلاق application
@@ -297,7 +307,7 @@ jobs:
             sed -i '0,/<\/activity>/s|</activity>|    <intent-filter android:autoVerify="true">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="my-bot-ehio.onrender.com" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="alshehab" android:host="app" />\n            </intent-filter>\n        </activity>|' "$MANIFEST"
           fi
           
-          # 🌟 السطر المنقذ: إجبار التطبيق على الفتح في نفس النافذة (singleTask  ) لمنع تكرار الشاشات عند الضغط على إشعار
+          # إجبار التطبيق على الفتح في نفس النافذة (singleTask) لمنع تكرار الشاشات عند الضغط على إشعار
           sed -i 's/android:launchMode="[^"]*"/android:launchMode="singleTask"/g' "$MANIFEST"
 
       - name: Validate Android configuration
@@ -311,7 +321,7 @@ jobs:
           fi
           
           if ! grep -q 'my-bot-ehio.onrender.com' "$MANIFEST"; then
-            echo "❌ خطأ: لم يتم العثور على إعدادات الرابط (Deep Link ) في Manifest"
+            echo "❌ خطأ: لم يتم العثور على إعدادات الرابط (Deep Link) في Manifest"
             exit 1
           fi
           
@@ -428,7 +438,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           
-          # 🌟 التحقق من وجود الأسرار قبل الإرسال
+          # التحقق من وجود الأسرار قبل الإرسال
           if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_ID" ]; then
             echo "⚠️ تحذير: BOT_TOKEN أو ADMIN_ID غير موجودة في أسرار GitHub (Secrets). لن يتم إرسال الإشعار."
             exit 0
