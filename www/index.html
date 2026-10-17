@@ -1660,9 +1660,15 @@
 <div id="agent-settings-screen" class="glass-panel screen-section" style="display: none;">
     <h3 style="margin-bottom: 15px; text-align: center; color: #8e2de2;"><i class="fas fa-cogs"></i> قسم الاعدادات</h3>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">        
+        
+        <!-- 🚀 زر إدارة المناديب (الجديد) -->
+        <button class="btn btn-outline vip-glow" style="font-size: 12px; padding: 10px; color: #f5af19; border-color: #f5af19; grid-column: span 2;" onclick="openSubAgentManagement()">
+            <i class="fas fa-user-tie"></i> إدارة المناديب (الوكلاء الفرعيين) 🛵
+        </button>
+
         <!-- 🚀 الزر الجديد للوحة الصلاحيات -->
-        <button class="btn btn-outline vip-glow" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d; grid-column: span 2;" onclick="openPermissionsCenter()">
-            <i class="fas fa-user-shield"></i> لوحة تحكم الصلاحيات الشاملة 🚦
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d; grid-column: span 2;" onclick="openPermissionsCenter()">
+            <i class="fas fa-user-shield"></i> لوحة تحكم صلاحيات البقالات 🚦
         </button>
         
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #00d2ff; border-color: #00d2ff;" onclick="manageCardTypes()"><i class="fas fa-images"></i> فئات الكروت</button>
@@ -2363,6 +2369,13 @@ if ('serviceWorker' in navigator) {
 }
 
 async function checkForUpdates() {
+        // 🌟 إعفاء مستخدمي تطبيق دكاني نهائياً من التحديث لأنهم متصلون بالسحابة مباشرة
+        if (localStorage.getItem('sso_from_dukkani') === 'true' || window.location.search.includes('sso_token')) {
+            let forceScreen = document.getElementById('force-update-screen');
+            if (forceScreen) forceScreen.style.display = 'none';
+            return;
+        }
+
         try {
             let res = await fetch(SERVER_URL + '/api/app_version?_t=' + Date.now()); 
             let data = await res.json();
@@ -2494,29 +2507,26 @@ async function checkForUpdates() {
                 
                 progressText.innerText = "جاري فتح نافذة التثبيت...";
                 
-                // 🌟 زيادة التأخير لـ 1000 ملي ثانية لضمان اكتمال حفظ الملف في ذاكرة الهاتف
+                // 🌟 فتح نافذة التثبيت بنظام الأندرويد الأصلي مع معالجة أذونات التثبيت
                 setTimeout(async () => {
                     try {
-                        if (FileOpener) {
-                            // 🌟 السحر هنا: استخدام response.url (الذي يبدأ بـ file://) بدلاً من response.path
+                        if (window.Capacitor.Plugins.FileOpener) {
+                            const { FileOpener } = window.Capacitor.Plugins;
+                            
+                            // نستخدم response.path الحقيقي لكي يقبله مثبت حزم الأندرويد
                             await FileOpener.openFile({
-                                path: response.url || response.path, 
+                                path: response.path, 
                                 mimeType: 'application/vnd.android.package-archive'
                             });
                         } else {
-                            throw new Error("إضافة FileOpener غير موجودة");
+                            throw new Error("FileOpener plugin missing");
                         }
                     } catch (openErr) {
-                        console.error("FileOpener Error:", openErr);
-                        
-                        // 🌟 محاولة أخيرة لفتح الملف محلياً من داخل النظام قبل الذهاب للمتصفح
-                        try {
-                            window.location.href = response.url;
-                        } catch (fallbackErr) {
-                            window.open(apkUrl, '_system');
-                        }
+                        console.error("FileOpener Failed, fallback to browser:", openErr);
+                        // 🌟 إذا رفض الأندرويد فتح النافذة الداخلية بسبب نقص الأذونات، نفتحه فوراً في متصفح النظام ليثبته المستخدم بضغطة زر
+                        window.open(apkUrl, '_system');
                     }
-                }, 1000);
+                }, 800);
 
                 setTimeout(() => {
                     btn.style.display = 'block';
@@ -3351,6 +3361,13 @@ ${errorDetails}
         // ================= شاشة القفل الذكية (Smart Lock Screen) =================
     function initLockScreen() {
         if (localStorage.getItem('is_force_updating') === 'true') return; 
+        
+        // 🌟 تجاوز شاشة القفل والبصمة فوراً إذا كان المستخدم داخلاً من تطبيق دكاني
+        if (localStorage.getItem('sso_from_dukkani') === 'true') {
+            document.getElementById('lock-screen').style.display = 'none';
+            return;
+        }
+
         if (userId > 0) {
             let lockTime = localStorage.getItem('app_lock_time');
             let now = Date.now();
@@ -4933,31 +4950,58 @@ async function orderNetworkCards() {
         }
 
         if(data && data.status === 'success') {
-            // 🌟 العزل التام: عرض كل كاش في مربعه الخاص
-            smartAnimate('agent-cards-cash', data.cards_cash);
-            smartAnimate('agent-telecom-cash', data.telecom_cash);
-            smartAnimate('agent-inventory-value', data.agent_inventory_value);
-            
-            // القسم الثاني: أموالي في السوق
-            smartAnimate('agent-market-debt', data.market_debt);
-            // تحديث التفاصيل الخلفية للمربعات التفاعلية
-            if(document.getElementById('detail-mgr-debt')) {
-                smartAnimate('detail-mgr-debt', data.detail_mgr_debt);
-                smartAnimate('detail-agent-debt', data.detail_agent_debt);
-                smartAnimate('detail-mgr-inv', data.detail_mgr_inv);
-                smartAnimate('detail-agent-inv', data.detail_agent_inv);
-            }
+            let userRole = localStorage.getItem('user_role');
+            let perms = {};
+            try {
+                let token = localStorage.getItem('auth_token');
+                if(token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
+            } catch(e) {}
 
-            // 🌟 التوافق مع العزل المالي: جمع كاش الكروت وكاش التسديدات للعرض الإجمالي
-            let totalReady = (parseFloat(data.total_ready_cards_cash) || 0) + (parseFloat(data.total_ready_telecom_cash) || 0);
-            smartAnimate('agent-ready-cash', totalReady);
+            let canViewProfits = (userRole !== 'sub_agent') || (perms.view_profits === true);
+            let canViewDebt = (userRole !== 'sub_agent') || (perms.view_debt === true);
+
+            // 🌟 القسم الأول: خزينتي (محمية من المندوب)
+            if (canViewProfits) {
+                smartAnimate('agent-cards-cash', data.cards_cash);
+                smartAnimate('agent-telecom-cash', data.telecom_cash);
+                smartAnimate('agent-inventory-value', data.agent_inventory_value);
+                if(document.getElementById('detail-mgr-inv')) {
+                    smartAnimate('detail-mgr-inv', data.detail_mgr_inv);
+                    smartAnimate('detail-agent-inv', data.detail_agent_inv);
+                }
+            } else {
+                ['agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value'].forEach(id => {
+                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                });
+            }
+            
+            // 🌟 القسم الثاني: أموالي في السوق (محمية من المندوب)
+            if (canViewDebt) {
+                smartAnimate('agent-market-debt', data.market_debt);
+                if(document.getElementById('detail-mgr-debt')) {
+                    smartAnimate('detail-mgr-debt', data.detail_mgr_debt);
+                    smartAnimate('detail-agent-debt', data.detail_agent_debt);
+                }
+                let totalReady = (parseFloat(data.total_ready_cards_cash) || 0) + (parseFloat(data.total_ready_telecom_cash) || 0);
+                smartAnimate('agent-ready-cash', totalReady);
+            } else {
+                ['agent-market-debt', 'agent-ready-cash'].forEach(id => {
+                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                });
+            }
             window.readyCashDetails = data.ready_cash_list || [];
             
-            // القسم الثالث: أرباحي والتزاماتي
-            smartAnimate('agent-pending-profit', data.agent_pending_profit);
+            // 🌟 القسم الثالث: أرباحي والتزاماتي (محمية تماماً من المندوب)
+            if (canViewProfits) {
+                smartAnimate('agent-pending-profit', data.agent_pending_profit);
+                smartAnimate('agent-live-profit', data.agent_total_profit);
+                smartAnimate('agent-required-remit', data.required_to_remit);
+            } else {
+                ['agent-pending-profit', 'agent-live-profit', 'agent-required-remit'].forEach(id => {
+                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                });
+            }
             window.pendingProfitsDetails = data.pending_profits_list || []; 
-            smartAnimate('agent-live-profit', data.agent_total_profit);
-            smartAnimate('agent-required-remit', data.required_to_remit); 
             
             // القسم الرابع: الأداء الشهري
             smartAnimate('agent-monthly-clients', data.monthly_clients_sales); 
@@ -6988,6 +7032,22 @@ async function fetchClientPermission(clientId) {
                 document.getElementById('api-logs-container').innerHTML = logsHtml;
             }
             
+            // 🌟 التعديل الجذري: دخول المندوب الميداني (الوكيل الفرعي) 🌟
+            else if (data.role === 'sub_agent') {
+                let settingsBtn = document.getElementById('settings-btn');
+                if(settingsBtn) settingsBtn.style.display = 'block';
+
+                // إخفاء أيقونة السحابة (لا يحتاجها المندوب)
+                let cloudSync = document.getElementById('cloud-sync-status');
+                if(cloudSync) cloudSync.style.display = 'none';
+
+                applyRoleTheme('agent'); // نستخدم نفس لون وثيم الوكيل
+                document.getElementById('welcome-msg').innerText = getSmartGreeting(data.name + " 🛵 (مندوب)");
+                
+                // فتح شاشة الوكيل (وستقوم دالة showAgentScreen ببتر الأزرار حسب الصلاحيات)
+                showAgentScreen();
+            }
+            
             // 🌟 حالة الزائر (الطياري)
             else {
                 let settingsBtn = document.getElementById('settings-btn');
@@ -7123,8 +7183,13 @@ async function fetchClientPermission(clientId) {
                         // حفظ الجلسة الدائمة
                         localStorage.setItem('auth_token', data.token);
                         localStorage.setItem('user_role', data.role);
+                        localStorage.setItem('saved_user_id', data.telegram_id); // 🌟 حفظ الآيدي المعتمد
                         localStorage.setItem('telegram_id', data.telegram_id);
                         localStorage.setItem('user_name', data.name);
+                        
+                        // 🌟 السحر هنا: إخبار نظام القفل أن الدخول من دكاني معتمد وموثوق
+                        localStorage.setItem('sso_from_dukkani', 'true');
+                        localStorage.setItem('app_lock_time', (Date.now() + 30 * 24 * 60 * 60 * 1000).toString());
                         
                         // مسح التوكن من الرابط نهائياً لحمايته
                         window.history.replaceState({}, document.title, window.location.pathname);
@@ -7393,6 +7458,132 @@ async function fetchClientPermission(clientId) {
             } else {
                 showToast(data.message, "error");
             }
+        } catch (e) { showToast("خطأ في الاتصال", "error"); }
+    }
+
+    // ================= دوال إدارة المناديب (الوكلاء الفرعيين) =================
+    async function openSubAgentManagement() {
+        playSound('click');
+        showToast("⏳ جاري جلب قائمة المناديب...", "warning");
+        
+        try {
+            let fd = new FormData();
+            fd.append('action', 'get');
+            
+            let data = await safeFetch('/api/manage_sub_agents', fd);
+            
+            if (data.status === 'success') {
+                let html = `<div style="max-height: 350px; overflow-y: auto; text-align: right;">`;
+                
+                if (data.sub_agents.length === 0) {
+                    html += `<div style="text-align:center; color:#aaa; padding:15px;">لا يوجد مناديب مسجلين حالياً.</div>`;
+                } else {
+                    data.sub_agents.forEach(s => {
+                        let perms = typeof s.permissions === 'string' ? JSON.parse(s.permissions || '{}') : (s.permissions || {});
+                        let pList = [];
+                        if(perms.view_profits) pList.push("👀 رؤية الأرباح");
+                        if(perms.view_debt) pList.push("👀 رؤية الديون");
+                        if(perms.finance) pList.push("💰 المالية");
+                        if(perms.reports) pList.push("📊 التقارير");
+                        if(perms.telecom) pList.push("⚡ التسديدات");
+                        if(perms.transfer) pList.push("🔄 التحويلات");
+                        if(perms.returns) pList.push("↩️ المرتجعات");
+                        
+                        html += `
+                        <div style="background: rgba(15, 23, 42, 0.9); padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #f5af19;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <strong style="color:#00d2ff; font-size:15px;">🛵 ${s.name}</strong>
+                                <button class="btn-small" style="background:#ff4757; color:#fff;" onclick="deleteSubAgent(${s.user_id}, '${escapeJS(s.name)}')"><i class="fas fa-trash"></i> إيقاف</button>
+                            </div>
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">🆔 رقم الدخول: <b style="color:#38ef7d; letter-spacing:1px;">${s.user_id}</b></div>
+                            <div style="color:#f5af19; font-size:11px; line-height: 1.5;">🛡️ الصلاحيات: ${pList.join(' | ') || 'لا يوجد صلاحيات'}</div>
+                        </div>`;
+                    });
+                }
+                html += `</div>`;
+                html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px;" onclick="addNewSubAgent()"><i class="fas fa-user-plus"></i> إضافة مندوب جديد</button>`;
+                
+                smartDialog({
+                    type: 'alert', title: '🛵 إدارة المناديب',
+                    message: html, icon: 'fa-user-tie', color: '#f5af19'
+                });
+            } else {
+                showToast(data.message, "error");
+            }
+        } catch (e) { showToast("خطأ في الاتصال", "error"); }
+    }
+
+    async function addNewSubAgent() {
+        document.getElementById('smart-dialog-overlay').style.display = 'none';
+        
+        setTimeout(async () => {
+            let name = await smartDialog({
+                type: 'prompt', title: 'اسم المندوب', message: 'أدخل اسم المندوب (مثال: محمد الميداني):',
+                icon: 'fa-user', color: '#00d2ff', inputType: 'text'
+            });
+            if (!name) return;
+
+            let password = await smartDialog({
+                type: 'prompt', title: 'كلمة المرور', message: `أدخل كلمة مرور للمندوب (${name}):`,
+                icon: 'fa-key', color: '#f5af19', inputType: 'text'
+            });
+            if (!password) return showToast("يجب إدخال كلمة مرور.", "warning");
+
+            // 🌟 أسئلة الصلاحيات الذكية
+            let pViewProfits = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له برؤية أرباحك ورأس المال والكاش الصافي للمدير؟', icon: 'fa-eye', color: '#ff4757' });
+            let pViewDebt = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له برؤية إجمالي ديون السوق (رأس المال)؟', icon: 'fa-users', color: '#00d2ff' });
+            let pFinance = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (المالية) لتسجيل المصروفات وغيرها؟', icon: 'fa-wallet', color: '#38ef7d' });
+            let pReports = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (التقارير والجرد)؟', icon: 'fa-chart-pie', color: '#8e2de2' });
+            let pTelecom = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (الخدمات الإلكترونية - الشحن)؟', icon: 'fa-bolt', color: '#f5af19' });
+            let pTransfer = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له باستخدام (مركز التحويلات) لنقل البضاعة بين البقالات؟', icon: 'fa-exchange-alt', color: '#00d2ff' });
+            let pReturns = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (المرتجعات والتوالف)؟', icon: 'fa-undo', color: '#ff4757' });
+
+            let perms = {
+                view_profits: pViewProfits, view_debt: pViewDebt, finance: pFinance, 
+                reports: pReports, telecom: pTelecom, transfer: pTransfer, returns: pReturns
+            };
+
+            showToast("⏳ جاري إضافة المندوب...", "warning");
+            try {
+                let fd = new FormData();
+                fd.append('action', 'add');
+                fd.append('name', name);
+                fd.append('password', password);
+                fd.append('permissions', JSON.stringify(perms));
+
+                let data = await safeFetch('/api/manage_sub_agents', fd);
+                
+                if (data.status === 'success') {
+                    playSound('success');
+                    smartDialog({ type: 'alert', title: 'تم بنجاح', message: data.message, icon: 'fa-check-circle', color: '#38ef7d' });
+                } else {
+                    showToast(data.message, "error");
+                }
+            } catch (e) { showToast("خطأ في الاتصال", "error"); }
+        }, 300);
+    }
+
+    async function deleteSubAgent(subId, name) {
+        let confirm = await smartDialog({
+            type: 'confirm', title: 'إيقاف المندوب',
+            message: `هل أنت متأكد من إيقاف وحذف المندوب (${name}) نهائياً؟\nلن يتمكن من الدخول للنظام بعد الآن.`,
+            icon: 'fa-user-slash', color: '#ff4757'
+        });
+        if (!confirm) return;
+
+        document.getElementById('smart-dialog-overlay').style.display = 'none';
+        showToast("⏳ جاري الحذف...", "warning");
+        try {
+            let fd = new FormData();
+            fd.append('action', 'delete');
+            fd.append('sub_id', subId);
+
+            let data = await safeFetch('/api/manage_sub_agents', fd);
+            if (data.status === 'success') {
+                playSound('success');
+                showToast(data.message, "success");
+                setTimeout(openSubAgentManagement, 1000);
+            } else { showToast(data.message, "error"); }
         } catch (e) { showToast("خطأ في الاتصال", "error"); }
     }
 
@@ -9532,7 +9723,7 @@ async function syncTelecomPackages() {
     function initialDataMenu() { showToast("إدخال الأرصدة الافتتاحية يتم من البوت في تليجرام.", "warning"); }
     function toggleMaintenance() { showToast("تفعيل وضع الصيانة يتم من البوت في تليجرام.", "warning"); }
 
-    // تصحيح دالة فتح شاشة الوكيل لفتح القائمة الرئيسية مع الشريط السفلي
+       // تصحيح دالة فتح شاشة الوكيل لفتح القائمة الرئيسية مع الشريط السفلي
     function showAgentScreen() {
         document.querySelectorAll('.screen-section').forEach(el => el.style.display = 'none');
         
@@ -9549,35 +9740,109 @@ async function syncTelecomPackages() {
         if (typeof loadAgentStats === "function") loadAgentStats();
         renderAgentQuickCards(); 
         
-        // ?? تشغيل التوجيه الذكي للوكيل فور اكتمال تحميل شاشته
+        // 🚀 تشغيل التوجيه الذكي للوكيل فور اكتمال تحميل شاشته
         if (typeof window.executePendingDeepLink === 'function') {
             setTimeout(() => window.executePendingDeepLink(), 300);
+        }
+
+        // 🌟 [الجديد] تطبيق صلاحيات المندوب (الوكيل الفرعي) 🌟
+        let userRole = localStorage.getItem('user_role');
+        if (userRole === 'sub_agent') {
+            applySubAgentPermissions();
         }
     }
 
     // ================= دالة التبديل بين شاشات الوكيل (Bottom Nav) =================
     function switchAgentTab(screenId, btnElement) {
-    playSound('click');
-    if(tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+        playSound('click');
+        if(tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
 
-    // 👇 إخفاء جميع الشاشات بالكامل (وليس شاشات الوكيل فقط) لمنع التداخل 👇
-    document.querySelectorAll('.screen-section').forEach(el => {
-        el.style.display = 'none';
-    });
+        // 👇 إخفاء جميع الشاشات بالكامل لمنع التداخل 👇
+        document.querySelectorAll('.screen-section').forEach(el => {
+            el.style.display = 'none';
+        });
 
-    // إزالة التفعيل من جميع أيقونات الشريط السفلي
-    document.querySelectorAll('#agent-bottom-nav .nav-item').forEach(btn => {
-        btn.classList.remove('active');
-    });
+        // إزالة التفعيل من جميع أيقونات الشريط السفلي
+        document.querySelectorAll('#agent-bottom-nav .nav-item').forEach(btn => {
+            btn.classList.remove('active');
+        });
 
-    // إظهار الشاشة المطلوبة وتفعيل الأيقونة
-    let target = document.getElementById(screenId);
-    if(target) {
-        target.style.display = 'block';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // إظهار الشاشة المطلوبة وتفعيل الأيقونة
+        let target = document.getElementById(screenId);
+        if(target) {
+            target.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        btnElement.classList.add('active');
     }
-    btnElement.classList.add('active');
-}
+
+    // 🌟 دالة تطبيق العمى المالي والصلاحيات للمندوب 🌟
+    function applySubAgentPermissions() {
+        let perms = {};
+        try {
+            let token = localStorage.getItem('auth_token');
+            if(token) {
+                let payload = JSON.parse(atob(token.split('.')[1]));
+                perms = payload.perms || {};
+            }
+        } catch(e) {}
+
+        // 1. العمى المالي (إخفاء الأرباح ورأس المال)
+        if (!perms.view_profits) {
+            let profitBoxes = [
+                'agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value', 
+                'agent-pending-profit', 'agent-live-profit', 'agent-required-remit',
+                'detail-mgr-inv', 'detail-agent-inv', 'detail-mgr-debt', 'detail-agent-debt'
+            ];
+            profitBoxes.forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.innerHTML = "<span style='font-size:24px; color:#aaa; font-weight:bold;'>***</span>";
+            });
+            // إخفاء زر محفظة الأرباح وتسديد المدير
+            document.querySelectorAll('button[onclick="viewAgentWallet()"], button[onclick="payManager()"]').forEach(btn => {
+                if (btn) btn.style.display = 'none';
+            });
+        }
+
+        // 2. إخفاء الديون الشاملة
+        if (!perms.view_debt) {
+            let el = document.getElementById('agent-market-debt');
+            if (el) el.innerHTML = "<span style='font-size:24px; color:#aaa; font-weight:bold;'>***</span>";
+            let readyCash = document.getElementById('agent-ready-cash');
+            if (readyCash) readyCash.innerHTML = "<span style='font-size:24px; color:#38ef7d; font-weight:bold;'>***</span>";
+        }
+
+        // 3. إخفاء الأقسام غير المسموحة من الشريط السفلي (التقارير والإعدادات والمالية)
+        let navItems = document.querySelectorAll('#agent-bottom-nav .nav-item');
+        if (navItems.length >= 5) {
+            if (!perms.finance) navItems[2].style.display = 'none'; // تبويب المالية
+            if (!perms.reports) navItems[3].style.display = 'none'; // تبويب التقارير
+            navItems[4].style.display = 'none'; // الإعدادات مخفية دائماً عن المندوب
+        }
+
+        // 4. بتر أزرار العمليات غير المصرح بها من قسم (العمليات والطلبات)
+        if (!perms.telecom) {
+            let telecomBtn = document.querySelector('button[onclick*="telecomApp.showDashboard"]');
+            if(telecomBtn) telecomBtn.style.display = 'none';
+        }
+        
+        if (!perms.transfer) {
+            let transferBtn = document.querySelector('button[onclick="startTransferWizard()"]');
+            if(transferBtn) transferBtn.style.display = 'none';
+        }
+
+        if (!perms.returns) {
+            let returnBtn = document.querySelector('button[onclick="startReturnWizard()"]');
+            if(returnBtn) returnBtn.style.display = 'none';
+        }
+
+        // 5. إخفاء أدوات الإدارة المتقدمة وزر التخفي (Ghost Mode) دائماً عن المندوب
+        let advancedTools = document.querySelector('button[onclick*="managerAdvancedModal"]');
+        if (advancedTools) advancedTools.style.display = 'none';
+        
+        let ghostBtn = document.querySelector('button[onclick="agentGhostMode()"]');
+        if (ghostBtn) ghostBtn.style.display = 'none';
+    }
 
 // ================= 1. دالة تسليم كروت لعميل (الجرد + الذكاء الاصطناعي + السلة) =================
 async function giveCardsToClient() {
@@ -10229,10 +10494,15 @@ async function giveCardsToClient() {
     // 3. مراقبة الخروج من التطبيق أو إخفائه
     document.addEventListener("visibilitychange", function() {
         if (document.hidden) {
-            localStorage.setItem('app_lock_time', '0'); // قفل فوري عند الخروج
+            // لا يقفل الشاشة إذا كان قادماً من تطبيق دكاني
+            if (localStorage.getItem('sso_from_dukkani') !== 'true') {
+                localStorage.setItem('app_lock_time', '0'); 
+            }
         } else {
-            checkLockStatus();
-            softUpdate(); // 👈 تحديث الأرقام فوراً بمجرد العودة للتطبيق
+            if (localStorage.getItem('sso_from_dukkani') !== 'true') {
+                checkLockStatus();
+            }
+            softUpdate();
         }
     });
 
