@@ -2257,7 +2257,7 @@
         <div id="statementList" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; font-size: 13px;">
             <!-- سيتم التعبئة بالجافاسكريبت -->
         </div>
-        <button class="btn btn-danger" style="width: 100%;" onclick="document.getElementById('statementModal').style.display='none'">إغلاق</button>
+        <button class="btn btn-danger" style="width: 100%;" onclick="document.getElementById('statementModal').style.display='none'; document.getElementById('statementList').innerHTML='';">إغلاق</button>
     </div>
 </div>
 
@@ -2292,7 +2292,7 @@
     <div class="modal-content" style="max-width: 400px;">
         <div class="chat-header">
             <h3 style="font-size: 16px; color: #f5af19;"><i class="fas fa-book"></i> دفتر ديون الزبائن</h3>
-            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('customerDebtModal').style.display='none'"></i>
+            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('customerDebtModal').style.display='none'; document.getElementById('customerDebtList').innerHTML='';"></i>
         </div>
         
         <!-- 🌟 شريط البحث السريع 🌟 -->
@@ -2306,7 +2306,7 @@
             <!-- سيتم التعبئة بالجافاسكريبت -->
         </div>
 
-        <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" onclick="document.getElementById('customerDebtModal').style.display='none'">
+        <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" onclick="document.getElementById('customerDebtModal').style.display='none'; document.getElementById('customerDebtList').innerHTML='';">
             <i class="fas fa-arrow-right"></i> رجوع
         </button>
     </div>
@@ -2502,43 +2502,37 @@ async function checkForUpdates() {
 
                 const fileName = 'Alshehab-Pro-Update.apk';
 
-                // 🌟 1. حفظ الملف في مجلد DOCUMENTS لكي يمتلك مثبت الأندرويد صلاحية قراءته
+                // 🌟 1. حفظ الملف في مجلد CACHE (التخزين المؤقت للتطبيق) لتجاوز قيود حماية الأندرويد الحديثة
                 const downloadResult = await Filesystem.downloadFile({
                     url: apkUrl,
                     path: fileName,
-                    directory: 'DOCUMENTS', 
+                    directory: 'CACHE', 
                     progress: true
                 });
                 
                 progressText.innerText = "جاري فتح نافذة التثبيت الآن...";
                 progressBar.style.width = '100%';
 
-                // 🌟 2. استخراج مسار الـ URI النظامي الموثق من FileProvider
-                const fileUriObj = await Filesystem.getUri({
-                    path: fileName,
-                    directory: 'DOCUMENTS'
-                });
-
-                const targetPath = fileUriObj.uri || downloadResult.path;
-
-                // 🌟 3. إطلاق شاشة تثبيت الهاتف فوراً بطلب نظامي
+                // 🌟 2. إطلاق شاشة تثبيت الهاتف فوراً بطلب نظامي مباشر
                 setTimeout(async () => {
                     try {
                         if (FileOpener) {
+                            // تمرير المسار المباشر، والمكتبة ستتكفل بإنشاء FileProvider URI آمن ومقبول من النظام
                             await FileOpener.openFile({
-                                path: targetPath, 
+                                path: downloadResult.path, 
                                 mimeType: 'application/vnd.android.package-archive'
                             });
                         } else {
-                            throw new Error("FileOpener غير موجود");
+                            throw new Error("مكتبة FileOpener غير موجودة");
                         }
                     } catch (openErr) {
                         console.error("فشل الفتح الداخلي، جاري التحويل للمتصفح:", openErr);
-                        // خطة الطوارئ المضمونة: فتح المتصفح الخارجي للنظام
-                        if (Browser) {
-                            await Browser.open({ url: apkUrl });
-                        } else {
-                            window.open(apkUrl, '_blank');
+                        // خطة الطوارئ المضمونة: إجبار الأندرويد على استخدام المتصفح الخارجي الأساسي للتنزيل
+                        try {
+                            // محاولة فتح الرابط عبر مدير النظام
+                            await window.Capacitor.Plugins.App.openUrl({ url: apkUrl });
+                        } catch(e) {
+                            window.open(apkUrl, '_system'); // _system تضمن الخروج من التطبيق للمتصفح
                         }
                     }
                 }, 500);
@@ -10818,6 +10812,12 @@ async function giveCardsToClient() {
                 // 🌟 توجيه الاتصال اللحظي إلى سيرفر Render مباشرة
         const wsUrl = `wss://my-bot-ehio.onrender.com/ws/live_updates?token=${token}`;
 
+        // تنظيف الاتصال القديم من الذاكرة قبل إنشاء واحد جديد لمنع التكرار (Memory Leak)
+        if (appSocket !== null) {
+            appSocket.onclose = null; // إيقاف إعادة الاتصال التلقائي للاتصال القديم
+            appSocket.close();
+        }
+
         appSocket = new WebSocket(wsUrl);
 
         appSocket.onopen = function() {
@@ -11597,6 +11597,7 @@ let currentSelectedNetwork = '';
 // ================= نظام التسديدات والباقات المتقدم (OOP) =================
 class TelecomGateway {
     constructor() {
+        this.isProcessing = false; // 🌟 حارس أمني لمنع النقرات المزدوجة
         this.currentPhone = '';
         this.currentNetwork = null;
         this.previousDashboard = '';
@@ -12238,8 +12239,11 @@ class TelecomGateway {
 
     // 10. تأكيد الدفع (للباقات الثابتة - مع التسعير الآلي)
     async confirmPayment(pkgId, pkgName, appliedPrice, isCash, cashPrice, creditPrice, retailPrice) {
-        let cleanPhone = this.currentPhone.replace(/\s/g, '');
-        let isAgent = (userId === ADMIN_ID || userId === MANAGER_ID);
+        if (this.isProcessing) return; // 🌟 منع تنفيذ أي نقرة جديدة حتى تنتهي الأولى
+        this.isProcessing = true;
+        try {
+            let cleanPhone = this.currentPhone.replace(/\s/g, '');
+            let isAgent = (userId === ADMIN_ID || userId === MANAGER_ID);
         
         let customerSaleType = 'cash';
         let customerName = "";
@@ -12413,6 +12417,8 @@ class TelecomGateway {
             }
         } catch (e) { 
             showToast("خطأ في الاتصال بالسيرفر", "error"); 
+        } finally {
+            this.isProcessing = false; // 🌟 تحرير القفل عند الانتهاء أو الإلغاء
         }
     }
 
@@ -12459,8 +12465,11 @@ class TelecomGateway {
 
     // 13. تسديد الرصيد المفتوح (مع التسعير الآلي والوحدات)
     async payOpenBalance() {
-        if (!this.currentNetwork) {
-            playSound('error');
+        if (this.isProcessing) return; // 🌟 منع تنفيذ أي نقرة جديدة حتى تنتهي الأولى
+        this.isProcessing = true;
+        try {
+            if (!this.currentNetwork) {
+                playSound('error');
             this.backToPhoneInput();
             return showToast("الرجاء إدخال رقم هاتف صحيح أولاً!", "error");
         }
@@ -12700,6 +12709,8 @@ class TelecomGateway {
             }
         } catch (e) { 
             showToast("خطأ في الاتصال بالسيرفر", "error"); 
+        } finally {
+            this.isProcessing = false; // 🌟 تحرير القفل عند الانتهاء أو الإلغاء
         }
     }
 
@@ -13354,7 +13365,7 @@ function clearAppBadge() {
     <div class="modal-content" style="max-width: 400px; background: #0f172a; border: 1px solid #ff4757;">
         <div class="chat-header" style="border-bottom-color: rgba(255, 71, 87, 0.3);">
             <h3 style="font-size: 16px; color: #ff4757;"><i class="fas fa-exclamation-triangle"></i> العمليات المرفوضة</h3>
-            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('failedOpsModal').style.display='none'"></i>
+            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('failedOpsModal').style.display='none'; document.getElementById('failed-ops-list').innerHTML='';"></i>
         </div>
         <p style="color: #ccc; font-size: 12px; text-align: center; margin: 10px 0;">هذه العمليات فشلت في الوصول للسيرفر 3 مرات متتالية. يرجى مراجعتها أو حذفها.</p>
         
@@ -13365,7 +13376,7 @@ function clearAppBadge() {
         <button class="btn btn-danger" style="width: 100%; margin-bottom: 10px;" onclick="clearAllFailedOps()">
             <i class="fas fa-trash-alt"></i> حذف جميع المرفوضات
         </button>
-        <button class="btn btn-outline" style="width: 100%; border-color: #aaa; color: #aaa;" onclick="document.getElementById('failedOpsModal').style.display='none'">إغلاق</button>
+        <button class="btn btn-outline" style="width: 100%; border-color: #aaa; color: #aaa;" onclick="document.getElementById('failedOpsModal').style.display='none'; document.getElementById('failed-ops-list').innerHTML='';">إغلاق</button>
     </div>
 </div>
 
