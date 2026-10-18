@@ -12239,186 +12239,182 @@ class TelecomGateway {
 
     // 10. تأكيد الدفع (للباقات الثابتة - مع التسعير الآلي)
     async confirmPayment(pkgId, pkgName, appliedPrice, isCash, cashPrice, creditPrice, retailPrice) {
-        if (this.isProcessing) return; // 🌟 منع تنفيذ أي نقرة جديدة حتى تنتهي الأولى
+        if (this.isProcessing) return; // 🌟 الحارس الأمني لمنع النقر المزدوج
         this.isProcessing = true;
+        
         try {
             let cleanPhone = this.currentPhone.replace(/\s/g, '');
             let isAgent = (userId === ADMIN_ID || userId === MANAGER_ID);
-        
-        let customerSaleType = 'cash';
-        let customerName = "";
-        let officialPrice = appliedPrice; 
-        let agentSaleType = 'admin';
+            
+            let customerSaleType = 'cash';
+            let customerName = "";
+            let officialPrice = appliedPrice; 
+            let agentSaleType = 'admin';
 
-        if (isAgent) {
-            agentSaleType = await smartSelect("نوع الشحن", [
-                { value: 'retail', text: '🛒 بيع طياري (لزبون مباشر)', icon: 'fa-user', color: '#38ef7d' },
-                { value: 'admin', text: '🏢 شحن إداري (بدون أرباح)', icon: 'fa-building', color: '#00d2ff' }
-            ]);
-            if (!agentSaleType) return;
-            
-            if (agentSaleType === 'retail') {
-                officialPrice = retailPrice + this.currentLoanAmount;
-            }
-        } else {
-            // 🌟 الحساب التلقائي بناءً على رصيد البقالة (بدون سؤال البقالة)
-            let currentBalanceText = document.getElementById('telecom-balance-display').innerText;
-            let currentBalance = parseFloat(currentBalanceText.replace(/[^\d.-]/g, '')) || 0;
-            
-            let requiredCashPrice = cashPrice + this.currentLoanAmount;
-            let requiredCreditPrice = creditPrice + this.currentLoanAmount;
-            
-            if (currentBalance >= requiredCashPrice) {
-                customerSaleType = 'cash';
-                appliedPrice = requiredCashPrice;
-            } else {
-                customerSaleType = 'credit';
-                appliedPrice = requiredCreditPrice;
-            }
-            officialPrice = appliedPrice;
-
-            // نسأل فقط إذا كان يريد تسجيلها كدين على زبونه في دفتر الديون الخاص به (اختياري)
-            let recordDebt = await smartDialog({
-                type: 'confirm', title: 'تسجيل في الدفتر؟',
-                message: 'هل تريد تسجيل هذه العملية كدين على زبونك في دفتر الديون؟',
-                icon: 'fa-book', color: '#f5af19'
-            });
-            
-            if (recordDebt) {
-                customerName = await smartDialog({
-                    type: 'prompt', title: 'اسم الزبون', message: 'لمن سددت الباقة؟ (سجل اسمه للدين)',
-                    icon: 'fa-user-edit', color: '#f5af19', inputType: 'text', placeholder: 'اسم الزبون...'
-                });
-                if (!customerName) return showToast("يجب إدخال اسم الزبون للبيع الآجل", "warning");
+            if (isAgent) {
+                agentSaleType = await smartSelect("نوع الشحن", [
+                    { value: 'retail', text: '🛒 بيع طياري (لزبون مباشر)', icon: 'fa-user', color: '#38ef7d' },
+                    { value: 'admin', text: '🏢 شحن إداري (بدون أرباح)', icon: 'fa-building', color: '#00d2ff' }
+                ]);
+                if (!agentSaleType) return;
                 
-                let customSellPrice = await smartDialog({
-                    type: 'prompt', title: 'مبلغ الدين', message: `بكم بعت الباقة لـ (${customerName})؟\n(سيتم تسجيل هذا المبلغ في دفتر ديون زبائنك)`,
-                    icon: 'fa-money-bill-wave', color: '#38ef7d', inputType: 'number', placeholder: 'أدخل السعر...'
-                });
-                if (!customSellPrice || customSellPrice <= 0) return showToast("يجب إدخال مبلغ الدين", "warning");
-                officialPrice = parseFloat(customSellPrice);
-            }
-        }
-
-        let receiptHtml = "";
-        if (isAgent) {
-            if (agentSaleType === 'retail') {
-                receiptHtml = `
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
-                        <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
-                    </div>
-                    <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
-                        <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
-                            <span style="color:#aaa; font-size: 13px;">السعر للزبون الطياري:</span>
-                            <strong style="color:#38ef7d;">${officialPrice} ريال</strong>
-                        </div>
-                        <div style="color:gold; font-size:12px; text-align:center; margin-top:10px;">سيتم إضافة الربح لمحفظتك فوراً 💰</div>
-                    </div>
-                `;
-            } else {
-                receiptHtml = `
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
-                        <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
-                    </div>
-                    <div style="color:#00d2ff; font-size:13px; text-align:center;">شحن إداري (بسعر التكلفة)</div>
-                `;
-            }
-        } else {
-            let paymentType = customerSaleType === 'cash' ? '<span style="color:#38ef7d;">(دفع مقدم)</span>' : '<span style="color:#ff4757;">(دفع آجل - سلفة)</span>';
-            let debtBadge = customerName ? `<div style="background: rgba(245, 175, 25, 0.2); color: #f5af19; padding: 5px; border-radius: 8px; text-align: center; margin-top: 10px; font-size: 12px; border: 1px dashed #f5af19;">سيتم تسجيل <b>${officialPrice} ريال</b> كدين على: <b>${customerName}</b></div>` : '';
-
-            receiptHtml = `
-                <div style="text-align: center; margin-bottom: 15px;">
-                    <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
-                    <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
-                </div>
-                
-                <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color:#aaa; font-size: 14px;">مخصومة من حسابك ${paymentType}:</span>
-                        <strong style="color:${customerSaleType === 'cash' ? '#38ef7d' : '#ff4757'}; font-size: 20px;">${appliedPrice} ريال</strong>
-                    </div>
-                    ${debtBadge}
-                </div>
-            `;
-        }
-
-        let confirm = await smartDialog({
-            type: 'confirm', title: 'تأكيد الشحن', message: receiptHtml, icon: 'fa-bolt', color: '#f5af19'
-        });
-
-        if (!confirm) return;
-
-        showToast("⏳ جاري تنفيذ عملية الشحن...", "warning");
-
-        let transactionUUID = generateUUID();
-        let fd = new FormData();
-        fd.append('client_id', userId);
-        fd.append('pkg_id', pkgId);
-        fd.append('phone', cleanPhone);
-        fd.append('txn_uuid', transactionUUID); 
-        // ?? تم حذف إرسال السلفة (loan_amount) لأن السيرفر سيحسبها بنفسه
-        
-        if (isAgent) {
-            fd.append('agent_sale_type', agentSaleType);
-        } else {
-            fd.append('customer_sale_type', customerSaleType);
-            if (customerName) fd.append('customer_name', customerName);
-            fd.append('official_price', officialPrice);
-        }
-
-        try {
-            let res = await safeFetch('/api/telecom_pay', fd);
-            if (res.status === 'success') {
-                // 🌟 سد ثغرة الرصيد اللانهائي: خصم الرصيد محلياً في الأوفلاين لكي يتوقف عند السقف
-                if (!navigator.onLine && !isAgent) {
-                    let cachedData = await localforage.getItem(`cached_user_data_${userId}`);
-                    if (cachedData) {
-                        let currentBal = parseFloat(cachedData.telecom_balance) || 0;
-                        let currentDebt = parseFloat(cachedData.telecom_debt) || 0;
-                        let currentTelecomCash = parseFloat(cachedData.telecom_pos_cash) || 0; // 👈 جلب الكاش الحالي
-                        
-                        if (currentBal >= appliedPrice) {
-                            cachedData.telecom_balance = currentBal - appliedPrice;
-                        } else {
-                            let addedDebt = appliedPrice - currentBal;
-                            let newDebt = currentDebt + addedDebt;
-                            cachedData.telecom_balance = 0;
-                            cachedData.telecom_debt = newDebt;
-                            
-                            // 🌟 التطابق المحاسبي للأوفلاين: زيادة كاش التسديدات مع حماية السقف
-                            cachedData.telecom_pos_cash = Math.max(0, Math.min(Math.max(0, newDebt), currentTelecomCash + addedDebt));
-                        }
-                        await localforage.setItem(`cached_user_data_${userId}`, cachedData);
-                    }
+                if (agentSaleType === 'retail') {
+                    officialPrice = retailPrice + this.currentLoanAmount;
                 }
-
-                // 👇👇 الكود الجديد: حفظ الرقم في السجل الذكي 👇👇
-                let history = JSON.parse(localStorage.getItem('telecom_history') || '[]');
-                history = history.filter(item => item.phone !== cleanPhone); // إزالة التكرار
-                history.unshift({ phone: cleanPhone, name: customerName || 'زبون طياري' }); // إضافته في الأعلى
-                if(history.length > 50) history.pop(); // الاحتفاظ بآخر 50 رقم فقط لعدم إرهاق الذاكرة
-                localStorage.setItem('telecom_history', JSON.stringify(history));
-                // 👆👆 نهاية الكود الجديد 👆👆
-
-                playSound('success');
-                showToast(res.message, "success");
-                if (typeof speakArabic === "function") speakArabic("تَمَّ التَّسْدِيدُ بِنَجَاح");
-                triggerGoldRain();
-                smartReload(1500);
-                setTimeout(() => { 
-                    this.backToPhoneInput(); 
-                    this.clearPhone(); 
-                }, 2000);
             } else {
-                showToast(res.message, "error");
+                let currentBalanceText = document.getElementById('telecom-balance-display').innerText;
+                let currentBalance = parseFloat(currentBalanceText.replace(/[^\d.-]/g, '')) || 0;
+                
+                let requiredCashPrice = cashPrice + this.currentLoanAmount;
+                let requiredCreditPrice = creditPrice + this.currentLoanAmount;
+                
+                if (currentBalance >= requiredCashPrice) {
+                    customerSaleType = 'cash';
+                    appliedPrice = requiredCashPrice;
+                } else {
+                    customerSaleType = 'credit';
+                    appliedPrice = requiredCreditPrice;
+                }
+                officialPrice = appliedPrice;
+
+                let recordDebt = await smartDialog({
+                    type: 'confirm', title: 'تسجيل في الدفتر؟',
+                    message: 'هل تريد تسجيل هذه العملية كدين على زبونك في دفتر الديون؟',
+                    icon: 'fa-book', color: '#f5af19'
+                });
+                
+                if (recordDebt) {
+                    customerName = await smartDialog({
+                        type: 'prompt', title: 'اسم الزبون', message: 'لمن سددت الباقة؟ (سجل اسمه للدين)',
+                        icon: 'fa-user-edit', color: '#f5af19', inputType: 'text', placeholder: 'اسم الزبون...'
+                    });
+                    if (!customerName) { showToast("يجب إدخال اسم الزبون للبيع الآجل", "warning"); return; }
+                    
+                    let customSellPrice = await smartDialog({
+                        type: 'prompt', title: 'مبلغ الدين', message: `بكم بعت الباقة لـ (${customerName})؟\n(سيتم تسجيل هذا المبلغ في دفتر ديون زبائنك)`,
+                        icon: 'fa-money-bill-wave', color: '#38ef7d', inputType: 'number', placeholder: 'أدخل السعر...'
+                    });
+                    if (!customSellPrice || customSellPrice <= 0) { showToast("يجب إدخال مبلغ الدين", "warning"); return; }
+                    officialPrice = parseFloat(customSellPrice);
+                }
             }
-        } catch (e) { 
-            showToast("خطأ في الاتصال بالسيرفر", "error"); 
+
+            let receiptHtml = "";
+            if (isAgent) {
+                if (agentSaleType === 'retail') {
+                    receiptHtml = `
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
+                            <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+                                <span style="color:#aaa; font-size: 13px;">السعر للزبون الطياري:</span>
+                                <strong style="color:#38ef7d;">${officialPrice} ريال</strong>
+                            </div>
+                            <div style="color:gold; font-size:12px; text-align:center; margin-top:10px;">سيتم إضافة الربح لمحفظتك فوراً 💰</div>
+                        </div>
+                    `;
+                } else {
+                    receiptHtml = `
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
+                            <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
+                        </div>
+                        <div style="color:#00d2ff; font-size:13px; text-align:center;">شحن إداري (بسعر التكلفة)</div>
+                    `;
+                }
+            } else {
+                let paymentType = customerSaleType === 'cash' ? '<span style="color:#38ef7d;">(دفع مقدم)</span>' : '<span style="color:#ff4757;">(دفع آجل - سلفة)</span>';
+                let debtBadge = customerName ? `<div style="background: rgba(245, 175, 25, 0.2); color: #f5af19; padding: 5px; border-radius: 8px; text-align: center; margin-top: 10px; font-size: 12px; border: 1px dashed #f5af19;">سيتم تسجيل <b>${officialPrice} ريال</b> كدين على: <b>${customerName}</b></div>` : '';
+
+                receiptHtml = `
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
+                        <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
+                    </div>
+                    
+                    <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#aaa; font-size: 14px;">مخصومة من حسابك ${paymentType}:</span>
+                            <strong style="color:${customerSaleType === 'cash' ? '#38ef7d' : '#ff4757'}; font-size: 20px;">${appliedPrice} ريال</strong>
+                        </div>
+                        ${debtBadge}
+                    </div>
+                `;
+            }
+
+            let confirm = await smartDialog({
+                type: 'confirm', title: 'تأكيد الشحن', message: receiptHtml, icon: 'fa-bolt', color: '#f5af19'
+            });
+
+            if (!confirm) return;
+
+            showToast("⏳ جاري تنفيذ عملية الشحن...", "warning");
+
+            let transactionUUID = generateUUID();
+            let fd = new FormData();
+            fd.append('client_id', userId);
+            fd.append('pkg_id', pkgId);
+            fd.append('phone', cleanPhone);
+            fd.append('txn_uuid', transactionUUID); 
+            
+            if (isAgent) {
+                fd.append('agent_sale_type', agentSaleType);
+            } else {
+                fd.append('customer_sale_type', customerSaleType);
+                if (customerName) fd.append('customer_name', customerName);
+                fd.append('official_price', officialPrice);
+            }
+
+            // حاول إرسال الطلب للسيرفر
+            try {
+                let res = await safeFetch('/api/telecom_pay', fd);
+                if (res.status === 'success') {
+                    if (!navigator.onLine && !isAgent) {
+                        let cachedData = await localforage.getItem(`cached_user_data_${userId}`);
+                        if (cachedData) {
+                            let currentBal = parseFloat(cachedData.telecom_balance) || 0;
+                            let currentDebt = parseFloat(cachedData.telecom_debt) || 0;
+                            let currentTelecomCash = parseFloat(cachedData.telecom_pos_cash) || 0; 
+                            
+                            if (currentBal >= appliedPrice) {
+                                cachedData.telecom_balance = currentBal - appliedPrice;
+                            } else {
+                                let addedDebt = appliedPrice - currentBal;
+                                let newDebt = currentDebt + addedDebt;
+                                cachedData.telecom_balance = 0;
+                                cachedData.telecom_debt = newDebt;
+                                cachedData.telecom_pos_cash = Math.max(0, Math.min(Math.max(0, newDebt), currentTelecomCash + addedDebt));
+                            }
+                            await localforage.setItem(`cached_user_data_${userId}`, cachedData);
+                        }
+                    }
+
+                    let history = JSON.parse(localStorage.getItem('telecom_history') || '[]');
+                    history = history.filter(item => item.phone !== cleanPhone); 
+                    history.unshift({ phone: cleanPhone, name: customerName || 'زبون طياري' }); 
+                    if(history.length > 50) history.pop(); 
+                    localStorage.setItem('telecom_history', JSON.stringify(history));
+
+                    playSound('success');
+                    showToast(res.message, "success");
+                    if (typeof speakArabic === "function") speakArabic("تَمَّ التَّسْدِيدُ بِنَجَاح");
+                    triggerGoldRain();
+                    smartReload(1500);
+                    setTimeout(() => { 
+                        this.backToPhoneInput(); 
+                        this.clearPhone(); 
+                    }, 2000);
+                } else {
+                    showToast(res.message, "error");
+                }
+            } catch (innerErr) {
+                showToast("خطأ في الاتصال بالسيرفر", "error");
+            }
         } finally {
-            this.isProcessing = false; // 🌟 تحرير القفل عند الانتهاء أو الإلغاء
+            // 🌟 تحرير القفل بشكل دائم مهما كان مسار الكود (نجاح، خطأ، أو إلغاء)
+            this.isProcessing = false;
         }
     }
 
@@ -12465,252 +12461,248 @@ class TelecomGateway {
 
     // 13. تسديد الرصيد المفتوح (مع التسعير الآلي والوحدات)
     async payOpenBalance() {
-        if (this.isProcessing) return; // 🌟 منع تنفيذ أي نقرة جديدة حتى تنتهي الأولى
+        if (this.isProcessing) return; // 🌟 الحارس الأمني لمنع النقر المزدوج
         this.isProcessing = true;
+        
         try {
             if (!this.currentNetwork) {
-                playSound('error');
-            this.backToPhoneInput();
-            return showToast("الرجاء إدخال رقم هاتف صحيح أولاً!", "error");
-        }
+                if (typeof playSound === 'function') playSound('error');
+                this.backToPhoneInput();
+                showToast("الرجاء إدخال رقم هاتف صحيح أولاً!", "error");
+                return;
+            }
 
-        let inputValue = document.getElementById('open-balance-amount').value;
-        if (!inputValue || inputValue <= 0) return showToast("الرجاء إدخال رقم صحيح", "warning");
+            let inputValue = document.getElementById('open-balance-amount').value;
+            if (!inputValue || inputValue <= 0) {
+                showToast("الرجاء إدخال رقم صحيح", "warning");
+                return;
+            }
 
-        let cleanPhone = this.currentPhone.replace(/\s/g, '');
-        let isAgent = (userId === ADMIN_ID || userId === MANAGER_ID);
-        
-        // 🌟 إرسال القيمة كما هي (وحدات أو ريال) والسيرفر سيتولى الحساب الآمن
-        let inputValueNum = parseFloat(inputValue);
-        let unitMsg = "";
-        let isUnits = false;
-        if (this.currentNetwork.usesUnits) {
-            unitMsg = `(${inputValue} وحدة)`;
-            isUnits = true;
-        }
-        
-        // 🌟 سد ثغرة التسعير الخاطئ في الأوفلاين: جلب الشرائح وحفظها في الذاكرة (Cache)
-        if (this.pricingTiers.length === 0) {
-            try {
-                if (navigator.onLine) {
-                    let res = await safeGet('/api/pricing_tiers');
-                    let data = await res.json();
-                    if (data.status === 'success') {
-                        this.pricingTiers = data.tiers;
-                        this.over1000Settings = data.over_1000;
-                        this.unitPrice = data.over_1000.unit_price || 12.0;
-                        localStorage.setItem('cached_pricing_tiers', JSON.stringify(data));
+            let cleanPhone = this.currentPhone.replace(/\s/g, '');
+            let isAgent = (userId === ADMIN_ID || userId === MANAGER_ID);
+            
+            let inputValueNum = parseFloat(inputValue);
+            let unitMsg = "";
+            let isUnits = false;
+            if (this.currentNetwork.usesUnits) {
+                unitMsg = `(${inputValue} وحدة)`;
+                isUnits = true;
+            }
+            
+            if (this.pricingTiers.length === 0) {
+                try {
+                    if (navigator.onLine) {
+                        let res = await safeGet('/api/pricing_tiers');
+                        let data = await res.json();
+                        if (data.status === 'success') {
+                            this.pricingTiers = data.tiers;
+                            this.over1000Settings = data.over_1000;
+                            this.unitPrice = data.over_1000.unit_price || 12.0;
+                            localStorage.setItem('cached_pricing_tiers', JSON.stringify(data));
+                        }
+                    } else {
+                        let cachedTiers = localStorage.getItem('cached_pricing_tiers');
+                        if (cachedTiers) {
+                            let data = JSON.parse(cachedTiers);
+                            this.pricingTiers = data.tiers;
+                            this.over1000Settings = data.over_1000;
+                            this.unitPrice = data.over_1000.unit_price || 12.0;
+                        }
                     }
-                } else {
-                    let cachedTiers = localStorage.getItem('cached_pricing_tiers');
-                    if (cachedTiers) {
-                        let data = JSON.parse(cachedTiers);
-                        this.pricingTiers = data.tiers;
-                        this.over1000Settings = data.over_1000;
-                        this.unitPrice = data.over_1000.unit_price || 12.0;
-                    }
-                }
-            } catch(e) { console.log("خطأ في جلب الشرائح"); }
-        }
+                } catch(e) { console.log("خطأ في جلب الشرائح"); }
+            }
 
-        // حساب التكلفة بالريال للواجهة الأمامية
-        let baseCostRiyal = isUnits ? (inputValueNum * this.unitPrice) : inputValueNum;
-        let totalCostRiyal = baseCostRiyal + this.currentLoanAmount; 
+            let baseCostRiyal = isUnits ? (inputValueNum * this.unitPrice) : inputValueNum;
+            let totalCostRiyal = baseCostRiyal + this.currentLoanAmount; 
 
-        // حساب الربح المتوقع
-        let cashProfit = 0; let creditProfit = 0; let retailProfit = 0;
-        if (baseCostRiyal <= 1000) {
-            let tier = this.pricingTiers.find(t => baseCostRiyal >= t.min_amount && baseCostRiyal <= t.max_amount);
-            if (tier) { cashProfit = tier.cash_profit; creditProfit = tier.credit_profit; retailProfit = tier.retail_profit; }
-        } else {
-            let multiplier = baseCostRiyal / 1000;
-            cashProfit = multiplier * this.over1000Settings.cash;
-            creditProfit = multiplier * this.over1000Settings.credit;
-            retailProfit = multiplier * this.over1000Settings.retail;
-        }
-
-        let customerSaleType = 'cash';
-        let customerName = "";
-        let officialPrice = 0;
-        let appliedPrice = 0;
-        let agentSaleType = 'admin';
-
-        if (isAgent) {
-            agentSaleType = await smartSelect("نوع الشحن", [
-                { value: 'retail', text: '🛒 بيع طياري (لزبون مباشر)', icon: 'fa-user', color: '#38ef7d' },
-                { value: 'admin', text: '🏢 شحن إداري (بدون أرباح)', icon: 'fa-building', color: '#00d2ff' }
-            ]);
-            if (!agentSaleType) return;
-            
-            officialPrice = (agentSaleType === 'retail') ? (baseCostRiyal + retailProfit + this.currentLoanAmount) : totalCostRiyal;
-        } else {
-            // 🌟 الحساب التلقائي بناءً على رصيد البقالة (بدون سؤال البقالة)
-            let currentBalanceText = document.getElementById('telecom-balance-display').innerText;
-            let currentBalance = parseFloat(currentBalanceText.replace(/[^\d.-]/g, '')) || 0;
-            
-            let requiredCashPrice = baseCostRiyal + cashProfit + this.currentLoanAmount;
-            let requiredCreditPrice = baseCostRiyal + creditProfit + this.currentLoanAmount;
-            
-            if (currentBalance >= requiredCashPrice) {
-                customerSaleType = 'cash';
-                appliedPrice = requiredCashPrice;
+            let cashProfit = 0; let creditProfit = 0; let retailProfit = 0;
+            if (baseCostRiyal <= 1000) {
+                let tier = this.pricingTiers.find(t => baseCostRiyal >= t.min_amount && baseCostRiyal <= t.max_amount);
+                if (tier) { cashProfit = tier.cash_profit; creditProfit = tier.credit_profit; retailProfit = tier.retail_profit; }
             } else {
-                customerSaleType = 'credit';
-                appliedPrice = requiredCreditPrice;
+                let multiplier = baseCostRiyal / 1000;
+                cashProfit = multiplier * this.over1000Settings.cash;
+                creditProfit = multiplier * this.over1000Settings.credit;
+                retailProfit = multiplier * this.over1000Settings.retail;
             }
-            officialPrice = appliedPrice;
 
-            // نسأل فقط إذا كان يريد تسجيلها كدين على زبونه في دفتر الديون الخاص به (اختياري)
-            let recordDebt = await smartDialog({
-                type: 'confirm', title: 'تسجيل في الدفتر؟',
-                message: 'هل تريد تسجيل هذه العملية كدين على زبونك في دفتر الديون؟',
-                icon: 'fa-book', color: '#f5af19'
-            });
-            
-            if (recordDebt) {
-                customerName = await smartDialog({
-                    type: 'prompt', title: 'اسم الزبون', message: 'لمن سددت الرصيد؟ (سجل اسمه للدين)',
-                    icon: 'fa-user-edit', color: '#f5af19', inputType: 'text', placeholder: 'اسم الزبون...'
-                });
-                if (!customerName) return showToast("يجب إدخال اسم الزبون للبيع الآجل", "warning");
+            let customerSaleType = 'cash';
+            let customerName = "";
+            let officialPrice = 0;
+            let appliedPrice = 0;
+            let agentSaleType = 'admin';
+
+            if (isAgent) {
+                agentSaleType = await smartSelect("نوع الشحن", [
+                    { value: 'retail', text: '🛒 بيع طياري (لزبون مباشر)', icon: 'fa-user', color: '#38ef7d' },
+                    { value: 'admin', text: '🏢 شحن إداري (بدون أرباح)', icon: 'fa-building', color: '#00d2ff' }
+                ]);
+                if (!agentSaleType) return;
                 
-                let customSellPrice = await smartDialog({
-                    type: 'prompt', title: 'مبلغ الدين', message: `بكم بعت الرصيد لـ (${customerName})؟\n(سيتم تسجيل هذا المبلغ في دفتر ديون زبائنك)`,
-                    icon: 'fa-money-bill-wave', color: '#38ef7d', inputType: 'number', placeholder: 'أدخل السعر...'
+                officialPrice = (agentSaleType === 'retail') ? (baseCostRiyal + retailProfit + this.currentLoanAmount) : totalCostRiyal;
+            } else {
+                let currentBalanceText = document.getElementById('telecom-balance-display').innerText;
+                let currentBalance = parseFloat(currentBalanceText.replace(/[^\d.-]/g, '')) || 0;
+                
+                let requiredCashPrice = baseCostRiyal + cashProfit + this.currentLoanAmount;
+                let requiredCreditPrice = baseCostRiyal + creditProfit + this.currentLoanAmount;
+                
+                if (currentBalance >= requiredCashPrice) {
+                    customerSaleType = 'cash';
+                    appliedPrice = requiredCashPrice;
+                } else {
+                    customerSaleType = 'credit';
+                    appliedPrice = requiredCreditPrice;
+                }
+                officialPrice = appliedPrice;
+
+                let recordDebt = await smartDialog({
+                    type: 'confirm', title: 'تسجيل في الدفتر؟',
+                    message: 'هل تريد تسجيل هذه العملية كدين على زبونك في دفتر الديون؟',
+                    icon: 'fa-book', color: '#f5af19'
                 });
-                if (!customSellPrice || customSellPrice <= 0) return showToast("يجب إدخال مبلغ الدين", "warning");
-                officialPrice = parseFloat(customSellPrice);
+                
+                if (recordDebt) {
+                    customerName = await smartDialog({
+                        type: 'prompt', title: 'اسم الزبون', message: 'لمن سددت الرصيد؟ (سجل اسمه للدين)',
+                        icon: 'fa-user-edit', color: '#f5af19', inputType: 'text', placeholder: 'اسم الزبون...'
+                    });
+                    if (!customerName) { showToast("يجب إدخال اسم الزبون للبيع الآجل", "warning"); return; }
+                    
+                    let customSellPrice = await smartDialog({
+                        type: 'prompt', title: 'مبلغ الدين', message: `بكم بعت الرصيد لـ (${customerName})؟\n(سيتم تسجيل هذا المبلغ في دفتر ديون زبائنك)`,
+                        icon: 'fa-money-bill-wave', color: '#38ef7d', inputType: 'number', placeholder: 'أدخل السعر...'
+                    });
+                    if (!customSellPrice || customSellPrice <= 0) { showToast("يجب إدخال مبلغ الدين", "warning"); return; }
+                    officialPrice = parseFloat(customSellPrice);
+                }
             }
-        }
 
-        let loanMsg = this.currentLoanAmount > 0 ? `  
-<small style="color:#ff4757;">شامل تسديد السلفة (${this.currentLoanAmount} ريال)</small>` : '';
-        let pkgName = `رصيد ${unitMsg}`;
+            let loanMsg = this.currentLoanAmount > 0 ? `  
+    <small style="color:#ff4757;">شامل تسديد السلفة (${this.currentLoanAmount} ريال)</small>` : '';
+            let pkgName = `رصيد ${unitMsg}`;
 
-        let receiptHtml = "";
-        if (isAgent) {
-            if (agentSaleType === 'retail') {
+            let receiptHtml = "";
+            if (isAgent) {
+                if (agentSaleType === 'retail') {
+                    receiptHtml = `
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
+                            <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+                                <span style="color:#aaa; font-size: 13px;">السعر للزبون الطياري:</span>
+                                <strong style="color:#38ef7d;">${officialPrice} ريال</strong>
+                            </div>
+                            ${loanMsg}
+                            <div style="color:gold; font-size:12px; text-align:center; margin-top:10px;">سيتم إضافة الربح لمحفظتك فوراً 💰</div>
+                        </div>
+                    `;
+                } else {
+                    receiptHtml = `
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
+                            <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
+                        </div>
+                        <div style="color:#00d2ff; font-size:13px; text-align:center;">شحن إداري (بسعر التكلفة)</div>
+                    `;
+                }
+            } else {
+                let paymentType = customerSaleType === 'cash' ? '<span style="color:#38ef7d;">(دفع مقدم)</span>' : '<span style="color:#ff4757;">(دفع آجل - سلفة)</span>';
+                let debtBadge = customerName ? `<div style="background: rgba(245, 175, 25, 0.2); color: #f5af19; padding: 5px; border-radius: 8px; text-align: center; margin-top: 10px; font-size: 12px; border: 1px dashed #f5af19;">سيتم تسجيل <b>${officialPrice} ريال</b> كدين على: <b>${customerName}</b></div>` : '';
+
                 receiptHtml = `
                     <div style="text-align: center; margin-bottom: 15px;">
                         <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
                         <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
                     </div>
+                    
                     <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
-                        <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
-                            <span style="color:#aaa; font-size: 13px;">السعر للزبون الطياري:</span>
-                            <strong style="color:#38ef7d;">${officialPrice} ريال</strong>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#aaa; font-size: 14px;">مخصومة من حسابك ${paymentType}:</span>
+                            <strong style="color:${customerSaleType === 'cash' ? '#38ef7d' : '#ff4757'}; font-size: 20px;">${appliedPrice} ريال</strong>
                         </div>
                         ${loanMsg}
-                        <div style="color:gold; font-size:12px; text-align:center; margin-top:10px;">سيتم إضافة الربح لمحفظتك فوراً 💰</div>
+                        ${debtBadge}
                     </div>
-                `;
-            } else {
-                receiptHtml = `
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
-                        <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
-                    </div>
-                    <div style="color:#00d2ff; font-size:13px; text-align:center;">شحن إداري (بسعر التكلفة)</div>
                 `;
             }
-        } else {
-            let paymentType = customerSaleType === 'cash' ? '<span style="color:#38ef7d;">(دفع مقدم)</span>' : '<span style="color:#ff4757;">(دفع آجل - سلفة)</span>';
-            let debtBadge = customerName ? `<div style="background: rgba(245, 175, 25, 0.2); color: #f5af19; padding: 5px; border-radius: 8px; text-align: center; margin-top: 10px; font-size: 12px; border: 1px dashed #f5af19;">سيتم تسجيل <b>${officialPrice} ريال</b> كدين على: <b>${customerName}</b></div>` : '';
 
-            receiptHtml = `
-                <div style="text-align: center; margin-bottom: 15px;">
-                    <h4 style="color: #00d2ff; margin-bottom: 5px; font-size: 16px;">${pkgName}</h4>
-                    <div style="color: #fff; letter-spacing: 3px; font-size: 22px; font-family: monospace; font-weight: bold;">${cleanPhone}</div>
-                </div>
-                
-                <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; margin: 15px 0; text-align: right; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color:#aaa; font-size: 14px;">مخصومة من حسابك ${paymentType}:</span>
-                        <strong style="color:${customerSaleType === 'cash' ? '#38ef7d' : '#ff4757'}; font-size: 20px;">${appliedPrice} ريال</strong>
-                    </div>
-                    ${loanMsg}
-                    ${debtBadge}
-                </div>
-            `;
-        }
+            let confirm = await smartDialog({
+                type: 'confirm', title: 'تأكيد تسديد رصيد', message: receiptHtml, icon: 'fa-bolt', color: '#f5af19'
+            });
 
-        let confirm = await smartDialog({
-            type: 'confirm', title: 'تأكيد تسديد رصيد', message: receiptHtml, icon: 'fa-bolt', color: '#f5af19'
-        });
+            if (!confirm) return;
 
-        if (!confirm) return;
+            showToast("⏳ جاري تنفيذ عملية الشحن...", "warning");
+            
+            let transactionUUID = generateUUID();
+            let fd = new FormData();
+            fd.append('client_id', userId);
+            fd.append('amount', inputValueNum); 
+            fd.append('is_units', isUnits ? 'true' : 'false'); 
+            fd.append('phone', cleanPhone);
+            fd.append('network', this.currentNetwork.id);
+            fd.append('txn_uuid', transactionUUID);
+            
+            if (isAgent) {
+                fd.append('agent_sale_type', agentSaleType);
+            } else {
+                fd.append('customer_sale_type', customerSaleType);
+                if (customerName) fd.append('customer_name', customerName);
+                fd.append('official_price', officialPrice);
+            }
 
-        showToast("⏳ جاري تنفيذ عملية الشحن...", "warning");
-        
-        let transactionUUID = generateUUID();
-        let fd = new FormData();
-        fd.append('client_id', userId);
-        fd.append('amount', inputValueNum); // 🌟 نرسل القيمة الخام (وحدات أو ريال)
-        fd.append('is_units', isUnits ? 'true' : 'false'); // 🌟 نخبر السيرفر هل هي وحدات أم ريال
-        fd.append('phone', cleanPhone);
-        fd.append('network', this.currentNetwork.id);
-        fd.append('txn_uuid', transactionUUID);
-        // 🌟 تم حذف إرسال السلفة (loan_amount) لأن السيرفر سيحسبها بنفسه
-        
-        if (isAgent) {
-            fd.append('agent_sale_type', agentSaleType);
-        } else {
-            fd.append('customer_sale_type', customerSaleType);
-            if (customerName) fd.append('customer_name', customerName);
-            fd.append('official_price', officialPrice);
-        }
-
-        try {
-            let res = await safeFetch('/api/telecom_pay_open', fd);
-            if (res.status === 'success') {
-                // 🌟 سد ثغرة الرصيد اللانهائي: خصم الرصيد محلياً في الأوفلاين لكي يتوقف عند السقف
-                if (!navigator.onLine && !isAgent) {
-                    let cachedData = await localforage.getItem(`cached_user_data_${userId}`);
-                    if (cachedData) {
-                        let currentBal = parseFloat(cachedData.telecom_balance) || 0;
-                        let currentDebt = parseFloat(cachedData.telecom_debt) || 0;
-                        let currentTelecomCash = parseFloat(cachedData.telecom_pos_cash) || 0; // 👈 جلب الكاش الحالي
-                        
-                        if (currentBal >= appliedPrice) {
-                            cachedData.telecom_balance = currentBal - appliedPrice;
-                        } else {
-                            let addedDebt = appliedPrice - currentBal;
-                            let newDebt = currentDebt + addedDebt;
-                            cachedData.telecom_balance = 0;
-                            cachedData.telecom_debt = newDebt;
+            try {
+                let res = await safeFetch('/api/telecom_pay_open', fd);
+                if (res.status === 'success') {
+                    if (!navigator.onLine && !isAgent) {
+                        let cachedData = await localforage.getItem(`cached_user_data_${userId}`);
+                        if (cachedData) {
+                            let currentBal = parseFloat(cachedData.telecom_balance) || 0;
+                            let currentDebt = parseFloat(cachedData.telecom_debt) || 0;
+                            let currentTelecomCash = parseFloat(cachedData.telecom_pos_cash) || 0; 
                             
-                            // 🌟 التطابق المحاسبي للأوفلاين: زيادة كاش التسديدات مع حماية السقف
-                            cachedData.telecom_pos_cash = Math.max(0, Math.min(Math.max(0, newDebt), currentTelecomCash + addedDebt));
+                            if (currentBal >= appliedPrice) {
+                                cachedData.telecom_balance = currentBal - appliedPrice;
+                            } else {
+                                let addedDebt = appliedPrice - currentBal;
+                                let newDebt = currentDebt + addedDebt;
+                                cachedData.telecom_balance = 0;
+                                cachedData.telecom_debt = newDebt;
+                                cachedData.telecom_pos_cash = Math.max(0, Math.min(Math.max(0, newDebt), currentTelecomCash + addedDebt));
+                            }
+                            await localforage.setItem(`cached_user_data_${userId}`, cachedData);
                         }
-                        await localforage.setItem(`cached_user_data_${userId}`, cachedData);
                     }
+
+                    let history = JSON.parse(localStorage.getItem('telecom_history') || '[]');
+                    history = history.filter(item => item.phone !== cleanPhone); 
+                    history.unshift({ phone: cleanPhone, name: customerName || 'زبون طياري' }); 
+                    if(history.length > 50) history.pop(); 
+                    localStorage.setItem('telecom_history', JSON.stringify(history));
+
+                    if (typeof playSound === 'function') playSound('success');
+                    showToast(res.message, "success");
+                    if (typeof speakArabic === "function") speakArabic("تَمَّ التَّسْدِيدُ بِنَجَاح");
+                    if (typeof triggerGoldRain === 'function') triggerGoldRain();
+                    
+                    smartReload(1500);
+                    setTimeout(() => { 
+                        this.backToPhoneInput(); 
+                        this.clearPhone(); 
+                        document.getElementById('open-balance-amount').value = ''; 
+                    }, 2000);
+                } else {
+                    showToast(res.message, "error");
                 }
-
-                // 👇👇 الكود الجديد: حفظ الرقم في السجل الذكي 👇👇
-                let history = JSON.parse(localStorage.getItem('telecom_history') || '[]');
-                history = history.filter(item => item.phone !== cleanPhone); // إزالة التكرار
-                history.unshift({ phone: cleanPhone, name: customerName || 'زبون طياري' }); // إضافته في الأعلى
-                if(history.length > 50) history.pop(); // الاحتفاظ بآخر 50 رقم فقط لعدم إرهاق الذاكرة
-                localStorage.setItem('telecom_history', JSON.stringify(history));
-                // 👆👆 نهاية الكود الجديد 👆👆
-
-                playSound('success');
-                showToast(res.message, "success");
-                if (typeof speakArabic === "function") speakArabic("تَمَّ التَّسْدِيدُ بِنَجَاح");
-                triggerGoldRain();
-                smartReload(1500);
-                setTimeout(() => { 
-                    this.backToPhoneInput(); 
-                    this.clearPhone(); 
-                    document.getElementById('open-balance-amount').value = ''; 
-                }, 2000);
-            } else {
-                showToast(res.message, "error");
+            } catch (innerErr) { 
+                showToast("خطأ في الاتصال بالسيرفر", "error"); 
             }
-        } catch (e) { 
-            showToast("خطأ في الاتصال بالسيرفر", "error"); 
         } finally {
-            this.isProcessing = false; // 🌟 تحرير القفل عند الانتهاء أو الإلغاء
+            // 🌟 تحرير القفل بشكل دائم
+            this.isProcessing = false;
         }
     }
 
