@@ -7475,130 +7475,305 @@ async function fetchClientPermission(clientId) {
         } catch (e) { showToast("خطأ في الاتصال", "error"); }
     }
 
-    // ================= دوال إدارة المناديب (الوكلاء الفرعيين) =================
+// =====================================================================
+    // نظام إدارة المناديب المتكامل (مربعات اختيار الصلاحيات + تعديل + حذف)
+    // =====================================================================
+
+    // تعريف قائمة كل صلاحيات الوكيل المتاحة لمنحها للمندوب
+    const ALL_SUB_AGENT_PERMISSIONS = [
+        // 1. العمليات والكروت (المدير والعملاء)
+        { key: 'cards_sell', label: '📦 تسليم كروت للبقالات (جملة)', group: 'العمليات والكروت', desc: 'تسليم البضاعة كدين آجل أو نقدي' },
+        { key: 'quick_sale', label: '⚡ بيع طياري مباشر', group: 'العمليات والكروت', desc: 'بيع كروت نقدي مباشر للمستهلكين' },
+        { key: 'transfer', label: '🔄 مركز التحويلات بين البقالات', group: 'العمليات والكروت', desc: 'نقل كميات بين حسابات البقالات' },
+        { key: 'returns', label: '↩️ المرتجعات وتوالف الكروت', group: 'العمليات والكروت', desc: 'استلام كروت مرتجعة أو تالفة' },
+        { key: 'receive_shipment', label: '🚚 استلام ومطابقة إرساليات المدير', group: 'العمليات والكروت', desc: 'جرد واستلام دفعات الكروت من إدارة الشبكة' },
+        { key: 'pending_orders', label: '📥 متابعة واعتماد طلبات البقالات', group: 'العمليات والكروت', desc: 'استقبال طلبات السلة واعتمادها' },
+
+        // 2. الخدمات الإلكترونية (خاص بالوكيل فقط)
+        { key: 'telecom', label: '📱 شحن فوري رصيد وباقات (خدمات الوكيل)', group: 'الخدمات الإلكترونية', desc: 'تنفيذ الشحن الفوري والباقات الإلكترونية' },
+
+        // 3. المالية والتحصيل
+        { key: 'collect_debt', label: '💰 تحصيل ديون من البقالات', group: 'المالية والتحصيل', desc: 'استلام كاش وسندات قبض من البقالات' },
+        { key: 'add_expense', label: '💸 تسجيل مصروفات يومية', group: 'المالية والتحصيل', desc: 'تسجيل المصروفات النثرية وخصمها من الصندوق' },
+        { key: 'view_cash', label: '💵 عرض تفاصيل الكاش والصندوق', group: 'المالية والتحصيل', desc: 'الاطلاع على النقدية المتوفرة بيدك' },
+        { key: 'agent_wallet', label: '💎 محفظة أرباح الوكيل وسحبها', group: 'المالية والتحصيل', desc: 'فتح محفظة الأرباح وسحب المبالغ' },
+        { key: 'pay_manager', label: '👑 توريد كاش للإدارة (تسديد المدير)', group: 'المالية والتحصيل', desc: 'تسجيل دفعات التوريد للمدير العام' },
+
+        // 4. التقارير والجرد
+        { key: 'reports', label: '📊 فتح قسم التقارير الشامل', group: 'التقارير والجرد', desc: 'الوصول لتبويب التقارير والكشوفات' },
+        { key: 'inventory', label: '📦 جرد المخزون الحالي', group: 'التقارير والجرد', desc: 'الاطلاع على تفاصيل الفئات والكميات' },
+        { key: 'market_debt_report', label: '📑 تقارير ديون السوق وحركة الكروت', group: 'التقارير والجرد', desc: 'توليد ملفات إكسل وكشوفات العملاء' },
+
+        // 5. الأسرار والشفافية المالية
+        { key: 'view_profits', label: '👁️ رؤية أرباح الوكيل ورأس المال وصافي الإدارة', group: 'الرؤية المالية', desc: 'إلغاء العمى المالي ورؤية الأرباح بالأرقام' },
+        { key: 'view_debt', label: '👥 رؤية إجمالي ديون السوق في الرئيسية', group: 'الرؤية المالية', desc: 'إظهار بطاقة ديون السوق والكاش الجاهز' },
+
+        // 6. الإدارة والتخفي
+        { key: 'ghost_mode', label: '👻 وضع التخفي والدخول لحسابات البقالات', group: 'الإدارة والأمان', desc: 'معاينة حساب العميل كما يراه بنفسه' },
+        { key: 'manage_settings', label: '⚙️ الوصول لقسم الإعدادات', group: 'الإدارة والأمان', desc: 'فتح تبويب الإعدادات العامة' }
+    ];
+
+    // متغير لتخزين قائمة المناديب الحالية محلياً
+    window.currentSubAgentsList = [];
+
+    // 1. فتح نافذة إدارة المناديب
     async function openSubAgentManagement() {
         playSound('click');
-        showToast("⏳ جاري جلب قائمة المناديب...", "warning");
+        showToast("⏳ جاري جلب المناديب...", "warning");
         
         try {
             let fd = new FormData();
             fd.append('action', 'get');
-            
             let data = await safeFetch('/api/manage_sub_agents', fd);
             
             if (data.status === 'success') {
-                let html = `<div style="max-height: 350px; overflow-y: auto; text-align: right;">`;
-                
-                if (data.sub_agents.length === 0) {
-                    html += `<div style="text-align:center; color:#aaa; padding:15px;">لا يوجد مناديب مسجلين حالياً.</div>`;
-                } else {
-                    data.sub_agents.forEach(s => {
-                        let perms = typeof s.permissions === 'string' ? JSON.parse(s.permissions || '{}') : (s.permissions || {});
-                        let pList = [];
-                        if(perms.view_profits) pList.push("👀 رؤية الأرباح");
-                        if(perms.view_debt) pList.push("👀 رؤية الديون");
-                        if(perms.finance) pList.push("💰 المالية");
-                        if(perms.reports) pList.push("📊 التقارير");
-                        if(perms.telecom) pList.push("⚡ التسديدات");
-                        if(perms.transfer) pList.push("🔄 التحويلات");
-                        if(perms.returns) pList.push("↩️ المرتجعات");
-                        
-                        html += `
-                        <div style="background: rgba(15, 23, 42, 0.9); padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #f5af19;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <strong style="color:#00d2ff; font-size:15px;">🛵 ${s.name}</strong>
-                                <button class="btn-small" style="background:#ff4757; color:#fff;" onclick="deleteSubAgent(${s.user_id}, '${escapeJS(s.name)}')"><i class="fas fa-trash"></i> إيقاف</button>
-                            </div>
-                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">🆔 رقم الدخول: <b style="color:#38ef7d; letter-spacing:1px;">${s.user_id}</b></div>
-                            <div style="color:#f5af19; font-size:11px; line-height: 1.5;">🛡️ الصلاحيات: ${pList.join(' | ') || 'لا يوجد صلاحيات'}</div>
-                        </div>`;
-                    });
-                }
-                html += `</div>`;
-                html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px;" onclick="addNewSubAgent()"><i class="fas fa-user-plus"></i> إضافة مندوب جديد</button>`;
-                
-                smartDialog({
-                    type: 'alert', title: '🛵 إدارة المناديب',
-                    message: html, icon: 'fa-user-tie', color: '#f5af19'
-                });
+                window.currentSubAgentsList = data.sub_agents || [];
+                renderSubAgentsListDialog();
             } else {
                 showToast(data.message, "error");
             }
-        } catch (e) { showToast("خطأ في الاتصال", "error"); }
+        } catch (e) {
+            showToast("خطأ في الاتصال بالخادم", "error");
+        }
     }
 
-    async function addNewSubAgent() {
+    // رسم قائمة المناديب داخل الحوار الذكي
+    function renderSubAgentsListDialog() {
+        let subs = window.currentSubAgentsList;
+        let html = `<div style="max-height: 400px; overflow-y: auto; text-align: right; padding-left: 5px;">`;
+        
+        if (subs.length === 0) {
+            html += `<div style="text-align:center; color:#888; padding:25px 10px;">لا يوجد مناديب مسجلين حالياً.<br>اضغط على زر (إضافة مندوب جديد) لمنح الصلاحيات.</div>`;
+        } else {
+            subs.forEach(s => {
+                let perms = typeof s.permissions === 'string' ? JSON.parse(s.permissions || '{}') : (s.permissions || {});
+                let activeCount = Object.values(perms).filter(Boolean).length;
+                let totalCount = ALL_SUB_AGENT_PERMISSIONS.length;
+                let isFullProxy = activeCount >= totalCount;
+                
+                html += `
+                <div style="background: rgba(15, 23, 42, 0.9); padding: 14px; border-radius: 12px; margin-bottom: 12px; border: 1px solid #f5af19; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                        <div>
+                            <strong style="color:#00d2ff; font-size:16px;">🛵 ${escapeHtml(s.name)}</strong>
+                            ${isFullProxy ? '<span style="background:gold; color:#000; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:6px; margin-right:6px;">وكيل كامل 👑</span>' : ''}
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-small" style="background:#00d2ff; color:#000; font-weight:bold; padding:4px 8px;" onclick="openSubAgentForm(${s.user_id})">
+                                <i class="fas fa-edit"></i> تعديل
+                            </button>
+                            <button class="btn-small" style="background:#ff4757; color:#fff; padding:4px 8px;" onclick="deleteSubAgent(${s.user_id}, '${escapeJS(s.name)}')">
+                                <i class="fas fa-trash"></i> إيقاف
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#aaa; margin-bottom:6px;">
+                        <span>🆔 رقم الدخول: <b style="color:#38ef7d; font-size:14px; letter-spacing:1px;">${s.user_id}</b></span>
+                        <span style="color:#f5af19;">⚡ الصلاحيات: <b>${activeCount} من ${totalCount}</b></span>
+                    </div>
+                    ${s.device_id ? '<div style="font-size:10px; color:#888;">📱 الحساب مربوط بهاتف المندوب</div>' : '<div style="font-size:10px; color:#38ef7d;">🔓 بانتظار تسجيل الدخول الأول</div>'}
+                </div>`;
+            });
+        }
+        
+        html += `</div>`;
+        html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px; font-weight:bold; font-size:14px;" onclick="openSubAgentForm(null)">
+                    <i class="fas fa-user-plus"></i> إضافة مندوب جديد (تحديد الصلاحيات)
+                 </button>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: '🛵 إدارة المناديب والوكلاء الفرعيين',
+            message: html,
+            icon: 'fa-users-cog',
+            color: '#f5af19'
+        });
+    }
+
+    // 2. فتح نافذة إضافة أو تعديل المندوب بمربعات الاختيار (Checkboxes)
+    function openSubAgentForm(subId = null) {
         document.getElementById('smart-dialog-overlay').style.display = 'none';
         
-        setTimeout(async () => {
-            let name = await smartDialog({
-                type: 'prompt', title: 'اسم المندوب', message: 'أدخل اسم المندوب (مثال: محمد الميداني):',
-                icon: 'fa-user', color: '#00d2ff', inputType: 'text'
+        let isEdit = subId !== null;
+        let sub = isEdit ? window.currentSubAgentsList.find(s => s.user_id == subId) : null;
+        let currentPerms = {};
+        if (sub) {
+            currentPerms = typeof sub.permissions === 'string' ? JSON.parse(sub.permissions || '{}') : (sub.permissions || {});
+        }
+        
+        setTimeout(() => {
+            // تجميع الصلاحيات حسب المجموعات
+            let groups = {};
+            ALL_SUB_AGENT_PERMISSIONS.forEach(p => {
+                if (!groups[p.group]) groups[p.group] = [];
+                groups[p.group].push(p);
             });
-            if (!name) return;
-
-            let password = await smartDialog({
-                type: 'prompt', title: 'كلمة المرور', message: `أدخل كلمة مرور للمندوب (${name}):`,
-                icon: 'fa-key', color: '#f5af19', inputType: 'text'
-            });
-            if (!password) return showToast("يجب إدخال كلمة مرور.", "warning");
-
-            // 🌟 أسئلة الصلاحيات الذكية
-            let pViewProfits = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له برؤية أرباحك ورأس المال والكاش الصافي للمدير؟', icon: 'fa-eye', color: '#ff4757' });
-            let pViewDebt = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له برؤية إجمالي ديون السوق (رأس المال)؟', icon: 'fa-users', color: '#00d2ff' });
-            let pFinance = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (المالية) لتسجيل المصروفات وغيرها؟', icon: 'fa-wallet', color: '#38ef7d' });
-            let pReports = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (التقارير والجرد)؟', icon: 'fa-chart-pie', color: '#8e2de2' });
-            let pTelecom = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (الخدمات الإلكترونية - الشحن)؟', icon: 'fa-bolt', color: '#f5af19' });
-            let pTransfer = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له باستخدام (مركز التحويلات) لنقل البضاعة بين البقالات؟', icon: 'fa-exchange-alt', color: '#00d2ff' });
-            let pReturns = await smartDialog({ type: 'confirm', title: 'صلاحيات المندوب', message: 'هل تسمح له بفتح قسم (المرتجعات والتوالف)؟', icon: 'fa-undo', color: '#ff4757' });
-
-            let perms = {
-                view_profits: pViewProfits, view_debt: pViewDebt, finance: pFinance, 
-                reports: pReports, telecom: pTelecom, transfer: pTransfer, returns: pReturns
-            };
-
-            showToast("⏳ جاري إضافة المندوب...", "warning");
-            try {
-                let fd = new FormData();
-                fd.append('action', 'add');
-                fd.append('name', name);
-                fd.append('password', password);
-                fd.append('permissions', JSON.stringify(perms));
-
-                let data = await safeFetch('/api/manage_sub_agents', fd);
+            
+            let formHtml = `
+            <div style="text-align: right; max-height: 480px; overflow-y: auto; padding: 4px;">
+                <div style="margin-bottom: 12px;">
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:4px;">اسم المندوب:</label>
+                    <input type="text" id="sub-form-name" value="${sub ? escapeHtml(sub.name) : ''}" placeholder="مثال: أحمد الميداني" 
+                           style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.4); border:1px solid #00d2ff; color:#fff; font-size:14px; box-sizing:border-box;">
+                </div>
                 
-                if (data.status === 'success') {
-                    playSound('success');
-                    smartDialog({ type: 'alert', title: 'تم بنجاح', message: data.message, icon: 'fa-check-circle', color: '#38ef7d' });
-                } else {
-                    showToast(data.message, "error");
-                }
-            } catch (e) { showToast("خطأ في الاتصال", "error"); }
-        }, 300);
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:4px;">${isEdit ? 'كلمة المرور (اتركها فارغة إذا لم ترغب في تغييرها):' : 'كلمة المرور:'}</label>
+                    <input type="text" id="sub-form-pass" placeholder="${isEdit ? '••••••••' : 'أدخل كلمة مرور قوية'}" 
+                           style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.4); border:1px solid #f5af19; color:#fff; font-size:14px; box-sizing:border-box;">
+                </div>
+
+                ${isEdit ? `
+                <div style="margin-bottom: 15px; background: rgba(0,210,255,0.08); padding:8px 12px; border-radius:8px; border:1px dashed #00d2ff;">
+                    <label style="font-size:12px; color:#00d2ff; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="sub-form-reset-device" style="width:16px; height:16px;">
+                        <span>فك ربط الهاتف (السماح للمندوب بتسجيل الدخول من جهاز جديد)</span>
+                    </label>
+                </div>` : ''}
+
+                <!-- أزرار التحكم السريع: تحديد الكل / إلغاء الكل -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px;">
+                    <span style="font-weight:bold; color:gold; font-size:13px;"><i class="fas fa-check-double"></i> اختر الصلاحيات والأزرار:</span>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" class="btn-small" style="background:#38ef7d; color:#000; font-weight:bold;" onclick="toggleAllSubPerms(true)">تحديد الكل (وكيل كامل)</button>
+                        <button type="button" class="btn-small" style="background:#555; color:#fff;" onclick="toggleAllSubPerms(false)">إلغاء الكل</button>
+                    </div>
+                </div>
+
+                <!-- مربعات الاختيار مصنفة -->
+                <div id="sub-perms-container">
+            `;
+
+            for (let groupName in groups) {
+                formHtml += `
+                <div style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px;">
+                    <div style="color: #00d2ff; font-weight:bold; font-size:13px; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.2); padding-bottom: 4px;">
+                        ${groupName}
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                `;
+
+                groups[groupName].forEach(p => {
+                    let isChecked = isEdit ? (currentPerms[p.key] === true) : true; // الافتراضي عند الإضافة تحديد الكل أو حسب رغبتك
+                    formHtml += `
+                    <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 4px; border-radius: 6px; transition: 0.2s;" class="sub-perm-item">
+                        <input type="checkbox" class="sub-perm-checkbox" data-key="${p.key}" ${isChecked ? 'checked' : ''} style="width: 18px; height: 18px; margin-top: 2px; accent-color: #38ef7d; cursor: pointer;">
+                        <div>
+                            <div style="color: #fff; font-size: 13px; font-weight: 500;">${p.label}</div>
+                            <div style="color: #888; font-size: 11px;">${p.desc}</div>
+                        </div>
+                    </label>
+                    `;
+                });
+
+                formHtml += `</div></div>`;
+            }
+
+            formHtml += `
+                </div>
+                <button class="btn btn-credit" style="width: 100%; margin-top: 15px; font-size: 15px; font-weight: bold;" onclick="saveSubAgent(${subId})">
+                    <i class="fas fa-save"></i> ${isEdit ? 'حفظ التعديلات' : 'إضافة المندوب واعتماد الصلاحيات'}
+                </button>
+                <button class="btn btn-dark" style="width: 100%; margin-top: 8px;" onclick="openSubAgentManagement()">
+                    <i class="fas fa-arrow-right"></i> رجوع لقائمة المناديب
+                </button>
+            </div>`;
+
+            smartDialog({
+                type: 'alert',
+                title: isEdit ? `⚙️ تعديل المندوب: ${sub.name}` : '➕ إضافة مندوب جديد وتحديد الصلاحيات',
+                message: formHtml,
+                icon: isEdit ? 'fa-user-edit' : 'fa-user-plus',
+                color: isEdit ? '#00d2ff' : '#38ef7d'
+            });
+        }, 200);
     }
 
+    // دوال مساعدة لتحديد وإلغاء كل المربعات
+    window.toggleAllSubPerms = function(status) {
+        document.querySelectorAll('.sub-perm-checkbox').forEach(cb => {
+            cb.checked = status;
+        });
+    };
+
+    // 3. حفظ بيانات وصلاحيات المندوب في السيرفر
+    async function saveSubAgent(subId = null) {
+        let name = document.getElementById('sub-form-name').value.trim();
+        let pass = document.getElementById('sub-form-pass').value.trim();
+        let isEdit = subId !== null;
+
+        if (!name) return showToast("يرجى إدخال اسم المندوب.", "warning");
+        if (!isEdit && !pass) return showToast("يرجى إدخال كلمة مرور للمندوب الجديد.", "warning");
+
+        // استخراج الصلاحيات من مربعات الاختيار (Checkboxes)
+        let perms = {};
+        document.querySelectorAll('.sub-perm-checkbox').forEach(cb => {
+            perms[cb.getAttribute('data-key')] = cb.checked;
+        });
+
+        let resetDevice = false;
+        let resetEl = document.getElementById('sub-form-reset-device');
+        if (resetEl && resetEl.checked) resetDevice = true;
+
+        showToast("⏳ جاري حفظ البيانات...", "warning");
+
+        try {
+            let fd = new FormData();
+            fd.append('action', isEdit ? 'update' : 'add');
+            if (isEdit) fd.append('sub_id', subId);
+            fd.append('name', name);
+            if (pass) fd.append('password', pass);
+            fd.append('permissions', JSON.stringify(perms));
+            if (resetDevice) fd.append('reset_device', 'true');
+
+            let data = await safeFetch('/api/manage_sub_agents', fd);
+            if (data.status === 'success') {
+                playSound('success');
+                smartDialog({
+                    type: 'alert',
+                    title: 'تم بنجاح ✨',
+                    message: data.message,
+                    icon: 'fa-check-circle',
+                    color: '#38ef7d'
+                });
+                setTimeout(openSubAgentManagement, 1500);
+            } else {
+                showToast(data.message, "error");
+            }
+        } catch (e) {
+            showToast("حدث خطأ أثناء الحفظ.", "error");
+        }
+    }
+
+    // 4. إيقاف / حذف المندوب
     async function deleteSubAgent(subId, name) {
         let confirm = await smartDialog({
-            type: 'confirm', title: 'إيقاف المندوب',
-            message: `هل أنت متأكد من إيقاف وحذف المندوب (${name}) نهائياً؟\nلن يتمكن من الدخول للنظام بعد الآن.`,
-            icon: 'fa-user-slash', color: '#ff4757'
+            type: 'confirm',
+            title: 'إيقاف المندوب',
+            message: `هل أنت متأكد من إيقاف المندوب (${name})؟\nلن يتمكن من الدخول للنظام، وستبقى سجلاته المالية محفوظة بأمان.`,
+            icon: 'fa-user-slash',
+            color: '#ff4757'
         });
+        
         if (!confirm) return;
-
         document.getElementById('smart-dialog-overlay').style.display = 'none';
-        showToast("⏳ جاري الحذف...", "warning");
+        showToast("⏳ جاري الإيقاف...", "warning");
+        
         try {
             let fd = new FormData();
             fd.append('action', 'delete');
             fd.append('sub_id', subId);
-
             let data = await safeFetch('/api/manage_sub_agents', fd);
             if (data.status === 'success') {
                 playSound('success');
                 showToast(data.message, "success");
                 setTimeout(openSubAgentManagement, 1000);
-            } else { showToast(data.message, "error"); }
-        } catch (e) { showToast("خطأ في الاتصال", "error"); }
+            } else {
+                showToast(data.message, "error");
+            }
+        } catch (e) {
+            showToast("خطأ في الاتصال", "error");
+        }
     }
 
         // ================= دالة التفعيل واستعادة كلمة المرور عبر الواتساب =================
@@ -9790,19 +9965,26 @@ async function syncTelecomPackages() {
         btnElement.classList.add('active');
     }
 
-    // 🌟 دالة تطبيق العمى المالي والصلاحيات للمندوب 🌟
+// 🌟 دالة تطبيق الصلاحيات الشاملة وإخفاء/إظهار أزرار شاشة المندوب 🌟
     function applySubAgentPermissions() {
         let perms = {};
         try {
             let token = localStorage.getItem('auth_token');
-            if(token) {
+            if (token) {
                 let payload = JSON.parse(atob(token.split('.')[1]));
                 perms = payload.perms || {};
             }
         } catch(e) {}
 
-        // 1. العمى المالي (إخفاء الأرباح ورأس المال)
-        if (!perms.view_profits) {
+        // دالة مساعدة لإظهار/إخفاء عنصر بأمان
+        const setVisible = (selector, isVisible) => {
+            document.querySelectorAll(selector).forEach(el => {
+                if (el) el.style.display = isVisible ? '' : 'none';
+            });
+        };
+
+        // 1. العمى المالي (الأرباح ورأس المال وصافي توريد المدير)
+        if (perms.view_profits !== true) {
             let profitBoxes = [
                 'agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value', 
                 'agent-pending-profit', 'agent-live-profit', 'agent-required-remit',
@@ -9810,52 +9992,48 @@ async function syncTelecomPackages() {
             ];
             profitBoxes.forEach(id => {
                 let el = document.getElementById(id);
-                if (el) el.innerHTML = "<span style='font-size:24px; color:#aaa; font-weight:bold;'>***</span>";
-            });
-            // إخفاء زر محفظة الأرباح وتسديد المدير
-            document.querySelectorAll('button[onclick="viewAgentWallet()"], button[onclick="payManager()"]').forEach(btn => {
-                if (btn) btn.style.display = 'none';
+                if (el) el.innerHTML = "<span style='font-size:22px; color:#aaa; font-weight:bold;'>***</span>";
             });
         }
 
-        // 2. إخفاء الديون الشاملة
-        if (!perms.view_debt) {
+        // 2. إخفاء الديون الإجمالية والكاش الجاهز بالبقالات
+        if (perms.view_debt !== true) {
             let el = document.getElementById('agent-market-debt');
-            if (el) el.innerHTML = "<span style='font-size:24px; color:#aaa; font-weight:bold;'>***</span>";
+            if (el) el.innerHTML = "<span style='font-size:22px; color:#aaa; font-weight:bold;'>***</span>";
             let readyCash = document.getElementById('agent-ready-cash');
-            if (readyCash) readyCash.innerHTML = "<span style='font-size:24px; color:#38ef7d; font-weight:bold;'>***</span>";
+            if (readyCash) readyCash.innerHTML = "<span style='font-size:22px; color:#38ef7d; font-weight:bold;'>***</span>";
         }
 
-        // 3. إخفاء الأقسام غير المسموحة من الشريط السفلي (التقارير والإعدادات والمالية)
+        // 3. قسم الخدمات الإلكترونية (شحن فوري وباقات - ميزة الوكيل الخاصة)
+        setVisible('button[onclick*="telecomApp.showDashboard"]', perms.telecom === true);
+
+        // 4. العمليات الميدانية
+        setVisible('button[onclick*="agent-give-screen"]', perms.cards_sell !== false); // افتراضي مسموح إلا إذا عطلته
+        setVisible('button[onclick*="agentQuickSale"]', perms.quick_sale !== false);
+        setVisible('button[onclick*="startTransferWizard"]', perms.transfer === true);
+        setVisible('button[onclick*="startReturnWizard"]', perms.returns === true);
+        setVisible('button[onclick*="agentReceiveCards"], button[onclick*="agentReceiveECards"]', perms.receive_shipment === true);
+        setVisible('button[onclick*="viewPendingOrders"]', perms.pending_orders === true);
+
+        // 5. شريط التنقل السفلي وأقسام المالية والتقارير والإعدادات
         let navItems = document.querySelectorAll('#agent-bottom-nav .nav-item');
         if (navItems.length >= 5) {
-            if (!perms.finance) navItems[2].style.display = 'none'; // تبويب المالية
-            if (!perms.reports) navItems[3].style.display = 'none'; // تبويب التقارير
-            navItems[4].style.display = 'none'; // الإعدادات مخفية دائماً عن المندوب
+            // navItems[0] = الرئيسية
+            // navItems[1] = العمليات
+            navItems[2].style.display = (perms.collect_debt || perms.add_expense || perms.view_cash) ? '' : 'none'; // المالية
+            navItems[3].style.display = perms.reports ? '' : 'none'; // التقارير
+            navItems[4].style.display = perms.manage_settings ? '' : 'none'; // الإعدادات
         }
 
-        // 4. بتر أزرار العمليات غير المصرح بها من قسم (العمليات والطلبات)
-        if (!perms.telecom) {
-            let telecomBtn = document.querySelector('button[onclick*="telecomApp.showDashboard"]');
-            if(telecomBtn) telecomBtn.style.display = 'none';
-        }
-        
-        if (!perms.transfer) {
-            let transferBtn = document.querySelector('button[onclick="startTransferWizard()"]');
-            if(transferBtn) transferBtn.style.display = 'none';
-        }
+        // 6. أزرار المالية التفصيلية
+        setVisible('button[onclick*="collectDebt"]', perms.collect_debt !== false);
+        setVisible('button[onclick*="addExpense"]', perms.add_expense === true);
+        setVisible('button[onclick*="viewAvailableCash"]', perms.view_cash === true);
+        setVisible('button[onclick*="viewAgentWallet"]', perms.agent_wallet === true);
+        setVisible('button[onclick*="payManager"]', perms.pay_manager === true);
 
-        if (!perms.returns) {
-            let returnBtn = document.querySelector('button[onclick="startReturnWizard()"]');
-            if(returnBtn) returnBtn.style.display = 'none';
-        }
-
-        // 5. إخفاء أدوات الإدارة المتقدمة وزر التخفي (Ghost Mode) دائماً عن المندوب
-        let advancedTools = document.querySelector('button[onclick*="managerAdvancedModal"]');
-        if (advancedTools) advancedTools.style.display = 'none';
-        
-        let ghostBtn = document.querySelector('button[onclick="agentGhostMode()"]');
-        if (ghostBtn) ghostBtn.style.display = 'none';
+        // 7. وضع التخفي لحسابات العملاء
+        setVisible('button[onclick*="agentGhostMode"]', perms.ghost_mode === true);
     }
 
 // ================= 1. دالة تسليم كروت لعميل (الجرد + الذكاء الاصطناعي + السلة) =================
