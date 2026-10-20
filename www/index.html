@@ -3548,28 +3548,32 @@ ${errorDetails}
         return Math.round(parseFloat(num)).toLocaleString('en-US');
     }
 
-    // ================= دالة مساعدة لرسم الكروت (تمنع التكرار + تحميل كسول 🚀) =================
+// ================= دالة مساعدة لرسم الكروت (مخزن مشترك مع إخفاء الأعداد للمندوب) =================
     function generateCardHTML(item, onClickAction) {
         let match = item.card_type.match(/\d+/);
         let imgName = match ? match[0] : 'logo';
         
-        // 🌟 التمييز الذكي بين الإلكتروني والورقي 🌟
         let isEcard = item.card_type.includes('إلكتروني') || item.card_type.includes('الكتروني');
-        
         let borderColor = isEcard ? '#00d2ff' : '#f5af19';
+        
         let badgeHtml = isEcard ? 
-            `<div style="position: absolute; top: 5px; right: 5px; background: rgba(0, 210, 255, 0.9); color: #000; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 3; box-shadow: 0 2px 5px rgba(0,0,0,0.5);"><i class="fas fa-wifi"></i> إلكتروني</div>` : 
-            `<div style="position: absolute; top: 5px; right: 5px; background: rgba(245, 175, 25, 0.9); color: #000; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 3; box-shadow: 0 2px 5px rgba(0,0,0,0.5);"><i class="fas fa-ticket-alt"></i> ورقي</div>`;
+            `<div style="position: absolute; top: 5px; right: 5px; background: rgba(0, 210, 255, 0.9); color: #000; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 3;"><i class="fas fa-wifi"></i> إلكتروني</div>` : 
+            `<div style="position: absolute; top: 5px; right: 5px; background: rgba(245, 175, 25, 0.9); color: #000; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 3;"><i class="fas fa-ticket-alt"></i> ورقي</div>`;
+
+        // 🌟 إخفاء العدد الإجمالي للمندوب (يظهر له: متاح للبيع ✅ فقط)
+        let userRole = localStorage.getItem('user_role');
+        let isSubAgent = (userRole === 'sub_agent');
+        let qtyText = isSubAgent ? 
+            '<span style="color:#38ef7d; font-weight:bold;"><i class="fas fa-check-circle"></i> متاح للبيع</span>' :             `متوفر: ${item.quantity}`;
 
         return `
         <div class="card-box" onclick="${onClickAction}" style="border: 1px solid ${borderColor}; box-shadow: inset 0 0 15px ${borderColor}20;">
             ${badgeHtml}
             <img src="/static/${imgName}.png" class="card-img" loading="lazy" onerror="this.src='/static/logo.png'">
             <div class="card-title">${item.card_type}</div>
-            <div class="card-qty">متوفر: ${item.quantity}</div>
+            <div class="card-qty">${qtyText}</div>
         </div>`;
     }
-
     // ================= العداد السينمائي للأرقام (مطور مع تأثير النبض وتجميل الأرقام) =================
     function animateValue(elementId, start, end, duration) {
         let obj = document.getElementById(elementId);
@@ -5024,10 +5028,26 @@ async function orderNetworkCards() {
                 window.pendingProfitsDetails = []; // إفراغ الأرباح من ذاكرة المتصفح
             }
 
-            // القسم الرابع: الأداء الشهري
-            smartAnimate('agent-monthly-clients', data.monthly_clients_sales); 
-            smartAnimate('agent-monthly-walkin', data.monthly_walkin_sales); 
-            window.categorySalesDetails = data.category_sales_list || []; 
+            // القسم الرابع: الأداء الشهري ومبيعات الفترة وتحليل الكروت المباعة (محمية من المندوب)
+            let canViewReports = (userRole !== 'sub_agent') || (perms.reports === true);
+            let monthlySection = document.getElementById('agent-monthly-section');
+            let catBtn = document.querySelector('button[onclick*="showCategorySalesDetails"]');
+            
+            if (canViewReports && canViewProfits) {
+                if (monthlySection) monthlySection.style.display = 'block';
+                if (catBtn) catBtn.style.display = 'block';
+                smartAnimate('agent-monthly-clients', data.monthly_clients_sales); 
+                smartAnimate('agent-monthly-walkin', data.monthly_walkin_sales); 
+                window.categorySalesDetails = data.category_sales_list || []; 
+            } else {
+                ['agent-monthly-clients', 'agent-monthly-walkin'].forEach(id => {
+                    let el = document.getElementById(id);
+                    if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                });
+                if (monthlySection) monthlySection.style.display = 'none'; // إخفاء القسم بالكامل للمندوب
+                if (catBtn) catBtn.style.display = 'none'; // إخفاء زر الكروت المباعة
+                window.categorySalesDetails = [];
+            } 
         }
     }
 
@@ -7359,16 +7379,26 @@ async function fetchClientPermission(clientId) {
                     localStorage.removeItem('cashier_name');
                     localStorage.removeItem('cashier_perms');
                 }
+                               
+                // 🌟 تحديث المعرف العالمي فوراً لضمان عدم التعليق أو الطرد
+                userId = parsedId;
                 
                 let response = await safeGet(`/api/user_data/${parsedId}`);
-                if (!response.ok) throw new Error("Failed to fetch user data");
-                
-                let data = await response.json();
-                localStorage.setItem(`cached_user_data_${parsedId}`, JSON.stringify(data)); 
-                
+                if (response && response.ok) {
+                    let data = await response.json();
+                    if (data && data.status === 'success') {
+                        localStorage.setItem(`cached_user_data_${parsedId}`, JSON.stringify(data));
+                        if (typeof localforage !== 'undefined') {
+                            await localforage.setItem(`cached_user_data_${parsedId}`, data);
+                        }
+                    }
+                }
+                 
                 playSound('success'); 
                 showToast(`أهلاً بك! 🎉`, "success");
-                setTimeout(() => window.location.reload(), 2000);
+                setTimeout(() => {
+                    window.location.href = window.location.pathname; // إعادة توجيه نظيفة بدون تعليق
+                }, 1000);
             } else {
                 playSound('error'); 
                 // 🌟 إذا كان الخطأ بسبب بصمة الهاتف، نظهر رسالة تنبيه فخمة
@@ -7572,63 +7602,181 @@ async function fetchClientPermission(clientId) {
         }
     }
 
-    // عرض القائمة داخل النافذة المنبثقة
-    function renderSubAgentsListDialog() {
-        let subs = window.currentSubAgentsList || [];
-        let html = `<div style="max-height: 380px; overflow-y: auto; text-align: right; padding-left: 4px;">`;
-        
-        if (subs.length === 0) {
-            html += `<div style="text-align:center; color:#aaa; padding:25px 10px; line-height: 1.6;">
-                        <i class="fas fa-user-friends" style="font-size: 32px; color: #555; margin-bottom: 10px; display:block;"></i>
-                        لا يوجد مناديب مسجلين حالياً.<br>اضغط على زر (إضافة مندوب جديد) بالأسفل لتحديد الصلاحيات.
-                     </div>`;
-        } else {
-            subs.forEach(s => {
-                let perms = typeof s.permissions === 'string' ? JSON.parse(s.permissions || '{}') : (s.permissions || {});
-                let activeCount = Object.values(perms).filter(Boolean).length;
-                let totalCount = ALL_SUB_AGENT_PERMISSIONS.length;
-                let isFullProxy = activeCount >= totalCount;
-                let sName = s.name ? String(s.name) : 'مندوب';
-                
-                html += `
-                <div style="background: rgba(15, 23, 42, 0.9); padding: 14px; border-radius: 12px; margin-bottom: 12px; border: 1px solid #f5af19; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                        <div>
-                            <strong style="color:#00d2ff; font-size:15px;">🛵 ${window.escapeHtml(sName)}</strong>
-                            ${isFullProxy ? '<span style="background:gold; color:#000; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:6px; margin-right:6px;">وكيل كامل 👑</span>' : ''}
-                        </div>
-                        <div style="display:flex; gap:6px;">
-                            <button class="btn-small" style="background:#00d2ff; color:#000; font-weight:bold; padding:4px 8px;" onclick="openSubAgentForm(${s.user_id})">
-                                <i class="fas fa-edit"></i> تعديل
-                            </button>
-                            <button class="btn-small" style="background:#ff4757; color:#fff; padding:4px 8px;" onclick="deleteSubAgent(${s.user_id}, '${escapeJS(sName)}')">
-                                <i class="fas fa-trash"></i> إيقاف
-                            </button>
-                        </div>
+// عرض القائمة داخل النافذة المنبثقة
+function renderSubAgentsListDialog() {
+    let subs = window.currentSubAgentsList || [];
+    let html = `<div style="max-height: 380px; overflow-y: auto; text-align: right; padding-left: 4px;">`;
+    
+    if (subs.length === 0) {
+        html += `<div style="text-align:center; color:#aaa; padding:25px 10px; line-height: 1.6;">
+                    <i class="fas fa-user-friends" style="font-size: 32px; color: #555; margin-bottom: 10px; display:block;"></i>
+                    لا يوجد مناديب مسجلين حالياً.<br>اضغط على زر (إضافة مندوب جديد) بالأسفل لتحديد الصلاحيات.
+                 </div>`;
+    } else {
+        subs.forEach(s => {
+            let perms = typeof s.permissions === 'string' ? JSON.parse(s.permissions || '{}') : (s.permissions || {});
+            let activeCount = Object.values(perms).filter(Boolean).length;
+            let totalCount = ALL_SUB_AGENT_PERMISSIONS.length;
+            let isFullProxy = activeCount >= totalCount;
+            let sName = s.name ? String(s.name) : 'مندوب';
+            
+            html += `
+            <div style="background: rgba(15, 23, 42, 0.9); padding: 14px; border-radius: 12px; margin-bottom: 12px; border: 1px solid #f5af19; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                    <div>
+                        <strong style="color:#00d2ff; font-size:15px;">🛵 ${window.escapeHtml(sName)}</strong>
+                        ${isFullProxy ? '<span style="background:gold; color:#000; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:6px; margin-right:6px;">وكيل كامل 👑</span>' : ''}
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#aaa; margin-bottom:4px;">
-                        <span>🆔 رقم الدخول: <b style="color:#38ef7d; font-size:14px; letter-spacing:1px;">${s.user_id}</b></span>
-                        <span style="color:#f5af19;">⚡ الصلاحيات: <b>${activeCount} من ${totalCount}</b></span>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-small" style="background:#00d2ff; color:#000; font-weight:bold; padding:4px 8px;" onclick="openSubAgentForm(${s.user_id})">
+                            <i class="fas fa-edit"></i> تعديل
+                        </button>
+                        <button class="btn-small" style="background:#ff4757; color:#fff; padding:4px 8px;" onclick="deleteSubAgent(${s.user_id}, '${escapeJS(sName)}')">
+                            <i class="fas fa-trash"></i> إيقاف
+                        </button>
+                        <button class="btn-small" style="background:#ffa502; color:#000; font-weight:bold; padding:4px 8px;" onclick="showActivityReport(${s.user_id})">
+                            <i class="fas fa-chart-line"></i> النشاط
+                        </button>
                     </div>
-                    ${s.device_id ? '<div style="font-size:10px; color:#888;">📱 مربوط بجهاز المندوب</div>' : '<div style="font-size:10px; color:#38ef7d;">🔓 بانتظار تسجيل الدخول الأول</div>'}
-                </div>`;
-            });
-        }
-        
-        html += `</div>`;
-        html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px; font-weight:bold; font-size:14px;" onclick="openSubAgentForm(null)">
-                    <i class="fas fa-user-plus"></i> إضافة مندوب جديد (تحديد الصلاحيات)
-                 </button>`;
-        
-        smartDialog({
-            type: 'alert',
-            title: '🛵 إدارة المناديب والوكلاء الفرعيين',
-            message: html,
-            icon: 'fa-users-cog',
-            color: '#f5af19'
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#aaa; margin-bottom:4px;">
+                    <span>🆔 رقم الدخول: <b style="color:#38ef7d; font-size:14px; letter-spacing:1px;">${s.user_id}</b></span>
+                    <span style="color:#f5af19;">⚡ الصلاحيات: <b>${activeCount} من ${totalCount}</b></span>
+                </div>
+                ${s.device_id ? '<div style="font-size:10px; color:#888;">📱 مربوط بجهاز المندوب</div>' : '<div style="font-size:10px; color:#38ef7d;">🔓 بانتظار تسجيل الدخول الأول</div>'}
+            </div>`;
         });
     }
+    
+    html += `</div>`;
+    html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px; font-weight:bold; font-size:14px;" onclick="openSubAgentForm(null)">
+                <i class="fas fa-user-plus"></i> إضافة مندوب جديد (تحديد الصلاحيات)
+             </button>`;
+    
+    smartDialog({
+        type: 'alert',
+        title: '🛵 إدارة المناديب والوكلاء الفرعيين',
+        message: html,
+        icon: 'fa-users-cog',
+        color: '#f5af19'
+    });
+}
 
+// 🌟 دالة فتح واستعراض تقرير نشاط المندوب وإرساله للتليجرام
+    async function openSubAgentReport(subId, subName) {
+        playSound('click');
+        showToast("⏳ جاري استخراج تقرير نشاط المندوب...", "warning");
+
+        try {
+            let todayStr = new Date().toISOString().split('T')[0];
+            let fd = new FormData();
+            fd.append('sub_id', subId);
+            fd.append('date', todayStr);
+
+            let res = await safeFetch('/api/sub_agent_activity_report', fd);
+            if (res.status === 'success') {
+                let html = `
+                <div style="text-align: right; max-height: 420px; overflow-y: auto; padding: 5px; font-size: 13px; line-height: 1.6;">
+                    
+                    <!-- بطاقة الخلاصة الكبرى -->
+                    <div style="background: rgba(56, 239, 125, 0.1); border: 1px solid #38ef7d; border-radius: 12px; padding: 12px; margin-bottom: 15px; text-align: center;">
+                        <span style="color:#ccc; font-size:11px;">صافي الكاش المتوفر مع المندوب لهذا اليوم:</span>
+                        <h2 style="color:#38ef7d; font-size:24px; margin: 4px 0;">${fmtNum(res.net_cash_in_hand)} <span style="font-size:13px;">ريال</span></h2>
+                        <small style="color:#f5af19;">إجمالي الكروت المسلمة: <b>${res.total_cards_count} كرت</b> (${fmtNum(res.total_delivered_amount)} ريال)</small>
+                    </div>
+
+                    <!-- الكروت المسلمة للبقالات -->
+                    <h4 style="color:#00d2ff; margin-bottom: 6px; border-bottom: 1px solid rgba(0,210,255,0.2); padding-bottom: 4px;">
+                        📦 الكروت المسلمة للبقالات (${res.cards_delivered.length}):
+                    </h4>
+                    ${res.cards_delivered.length > 0 ? res.cards_delivered.map(c => `
+                        <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <span>🏪 ${escapeHTML(c.client)}: <small style="color:#aaa;">${escapeHTML(c.details)}</small></span>
+                            <strong style="color:gold;">${fmtNum(c.amount)} ر.ي</strong>
+                        </div>
+                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يقم بتسليم كروت اليوم.</div>'}
+
+                    <!-- الكاش المقبوض من البقالات -->
+                    <h4 style="color:#38ef7d; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(56,239,125,0.2); padding-bottom: 4px;">
+                        💵 الكاش المقبوض من الديون (${res.debt_collected.length}):
+                    </h4>
+                    ${res.debt_collected.length > 0 ? res.debt_collected.map(d => `
+                        <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <span>🏪 قبض من: <b>${escapeHTML(d.client)}</b></span>
+                            <strong style="color:#38ef7d;">${fmtNum(d.amount)} ر.ي</strong>
+                        </div>
+                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يتم تحصيل كاش اليوم.</div>'}
+
+                    <!-- مبيعات الطياري إن وجدت -->
+                    ${res.walkin_sales.length > 0 ? `
+                        <h4 style="color:#f5af19; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(245,175,25,0.2); padding-bottom: 4px;">
+                            🛒 مبيعات الطياري (كاش):
+                        </h4>
+                        ${res.walkin_sales.map(w => `
+                            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <span>${escapeHTML(w.details)}</span>
+                                <strong style="color:#38ef7d;">${fmtNum(w.amount)} ر.ي</strong>
+                            </div>
+                        `).join('')}
+                    ` : ''}
+
+                    <!-- المصروفات إن وجدت -->
+                    ${res.expenses.length > 0 ? `
+                        <h4 style="color:#ff4757; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,71,87,0.2); padding-bottom: 4px;">
+                            💸 المصروفات المسجلة:
+                        </h4>
+                        ${res.expenses.map(e => `
+                            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <span>${escapeHTML(e.details)}</span>
+                                <strong style="color:#ff4757;">-${fmtNum(e.amount)} ر.ي</strong>
+                            </div>
+                        `).join('')}
+                    ` : ''}
+
+                    <!-- زر الإرسال لتليجرام الوكيل -->
+                    <button class="btn btn-outline" style="width:100%; margin-top:15px; border-color:#00d2ff; color:#00d2ff;" onclick="sendSubAgentReportToTelegram(${subId}, '${todayStr}')">
+                        <i class="fab fa-telegram-plane"></i> 📲 إرسال التقرير الكامل لتليجرام الوكيل
+                    </button>
+                    <button class="btn btn-dark" style="width:100%; margin-top:8px;" onclick="openSubAgentManagement()">
+                        <i class="fas fa-arrow-right"></i> رجوع للمناديب
+                    </button>
+                </div>`;
+
+                smartDialog({
+                    type: 'alert',
+                    title: `📋 نشاط: ${res.sub_name} (${todayStr})`,
+                    message: html,
+                    icon: 'fa-file-invoice',
+                    color: '#f5af19'
+                });
+            } else {
+                showToast(res.message || "لا توجد حركات مسجلة لهذا اليوم", "warning");
+            }
+        } catch(e) {
+            showToast("خطأ في الاتصال بالخادم", "error");
+        }
+    }
+
+    // دالة إرسال التقرير لتليجرام بنقرة واحدة
+    async function sendSubAgentReportToTelegram(subId, dateStr) {
+        showToast("⏳ جاري إرسال التقرير إلى تليجرام...", "warning");
+        try {
+            let fd = new FormData();
+            fd.append('sub_id', subId);
+            fd.append('date', dateStr);
+            fd.append('send_telegram', 'true');
+
+            let res = await safeFetch('/api/sub_agent_activity_report', fd);
+            if (res.status === 'success') {
+                playSound('success');
+                showToast("✅ تم إرسال التقرير إلى محادثتك في تليجرام بنجاح!", "success");
+            } else {
+                showToast(res.message || "تعذر الإرسال", "error");
+            }
+        } catch(e) {
+            showToast("خطأ في الاتصال", "error");
+        }
+    }
     // 2. فتح نافذة إضافة أو تعديل المندوب بمربعات الاختيار (Checkboxes)
     function openSubAgentForm(subId = null) {
         document.getElementById('smart-dialog-overlay').style.display = 'none';
@@ -10006,8 +10154,9 @@ async function syncTelecomPackages() {
     }
 
 // 🌟 دالة تطبيق الصلاحيات الشاملة للمندوب وحجب الأقسام غير المصرح بها 🌟
-    function applySubAgentPermissions() {
+    function applySubAgentPermissions() {        
         let perms = {};
+        let userRole = localStorage.getItem('user_role');
         try {
             let token = localStorage.getItem('auth_token');
             if (token) {
@@ -10016,75 +10165,77 @@ async function syncTelecomPackages() {
             }
         } catch(e) {}
 
+        if (userRole !== 'sub_agent') return;
+
         const setVisible = (selector, isVisible) => {
             document.querySelectorAll(selector).forEach(el => {
                 if (el) el.style.display = isVisible ? '' : 'none';
             });
         };
 
-        // 1. العمى المالي (إخفاء الأرباح والكاش الصافي للمدير وتشفير الوجهين)
+        // 1. العمى المالي الشامل (إخفاء الأرباح، الكاش، ومبيعات الفترة)
         if (perms.view_profits !== true) {
             let profitBoxes = [
                 'agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value', 
                 'agent-pending-profit', 'agent-live-profit', 'agent-required-remit',
-                'detail-mgr-inv', 'detail-agent-inv'
+                'detail-mgr-inv', 'detail-agent-inv', 'detail-mgr-debt', 'detail-agent-debt',
+                'agent-monthly-clients', 'agent-monthly-walkin'
             ];
             profitBoxes.forEach(id => {
                 let el = document.getElementById(id);
                 if (el) el.innerHTML = "<span style='font-size:20px; color:#aaa; font-weight:bold;'>***</span>";
             });
-        }
 
-        // 2. إخفاء الديون الشاملة وتشفير الوجهين
-        if (perms.view_debt !== true) {
-            let debtBoxes = [
-                'agent-market-debt', 'detail-mgr-debt', 'detail-agent-debt', 'agent-ready-cash'
-            ];
-            debtBoxes.forEach(id => {
-                let el = document.getElementById(id);
-                if (el) el.innerHTML = "<span style='font-size:20px; color:#aaa; font-weight:bold;'>***</span>";
-            });
-        }
+            // إخفاء قسم الأداء الشهري وزر الكروت المباعة
+            let monthlyHeader = document.querySelector('h4 i.fa-calendar-alt')?.parentElement;
+            if (monthlyHeader) monthlyHeader.style.display = 'none';
+            setVisible('button[onclick*="showCategorySalesDetails"]', false);
+            setVisible('button[onclick*="viewAgentWallet"]', false);
+            setVisible('button[onclick*="payManager"]', false);
 
-        // 🔒 إلغاء تأثير القلب (Flip) للمندوب لكي لا ينقلب المربع ولا تظهر الأرقام الخلفية عند لمسه
-        if (perms.view_profits !== true || perms.view_debt !== true) {
+            // 🔒 إلغاء تأثير القلب (Flip) لكي لا يرى التفاصيل عند لمس المربع
             document.querySelectorAll('.flip-container').forEach(c => {
-                c.style.pointerEvents = 'none'; // تعطيل اللمس والقلب نهائياً للمندوب
+                c.style.pointerEvents = 'none';
             });
         }
 
-        // 3. قسم الخدمات الإلكترونية (شحن فوري وباقات - ميزة الوكيل)
+        // 2. إخفاء ديون السوق وكاش البقالات
+        if (perms.view_debt !== true) {
+            let el = document.getElementById('agent-market-debt');
+            if (el) el.innerHTML = "<span style='font-size:20px; color:#aaa; font-weight:bold;'>***</span>";
+            let readyCash = document.getElementById('agent-ready-cash');
+            if (readyCash) {
+                readyCash.innerHTML = "<span style='font-size:20px; color:#38ef7d; font-weight:bold;'>***</span>";
+                readyCash.parentElement.onclick = () => showToast("⛔ غير مصرح لك بعرض تفاصيل كاش البقالات.", "warning");
+            }
+        }
+
+        // 3. قسم الخدمات الإلكترونية (شحن فوري وباقات)
         setVisible('button[onclick*="telecomApp.showDashboard"]', perms.telecom === true);
 
         // 4. العمليات الميدانية
         setVisible('button[onclick*="agent-give-screen"]', perms.cards_sell !== false);
         setVisible('button[onclick*="agentQuickSale"]', perms.quick_sale !== false);
         setVisible('button[onclick*="startTransferWizard"]', perms.transfer === true);
-        
-        // 🔒 إخفاء التوالف والمرتجعات ورفع الصور ومطابقة الإرساليات عن المندوب إلا بصلاحية صريحة
         setVisible('button[onclick*="startReturnWizard"]', perms.returns === true);
-        setVisible('button[onclick*="viewSupportTickets"]', perms.returns === true); // تذاكر التوالف
-        setVisible('button[onclick*="startAiDailyEntry"]', false); // إدخال بالصورة (رفع صورة الدفتر) مخفي للمندوب دائماً
-        setVisible('button[onclick*="agentReceiveCards"], button[onclick*="agentReceiveECards"]', perms.receive_shipment === true); // مطابقة إرساليات الإدارة
+        setVisible('button[onclick*="viewSupportTickets"]', perms.returns === true);
+        setVisible('button[onclick*="startAiDailyEntry"]', false); // إدخال بالصورة مخفي دائماً للمندوب
+        setVisible('button[onclick*="agentReceiveCards"], button[onclick*="agentReceiveECards"]', perms.receive_shipment === true);
         setVisible('button[onclick*="viewPendingOrders"]', perms.pending_orders === true);
+        setVisible('button[onclick*="agentGhostMode"]', perms.ghost_mode === true);
 
-        // 5. شريط التنقل السفلي (Bottom Nav)
+        // 5. شريط التنقل السفلي
         let navItems = document.querySelectorAll('#agent-bottom-nav .nav-item');
         if (navItems.length >= 5) {
-            navItems[2].style.display = (perms.collect_debt || perms.add_expense || perms.view_cash) ? '' : 'none'; // تبويب المالية
-            navItems[3].style.display = perms.reports ? '' : 'none'; // تبويب التقارير
-            navItems[4].style.display = perms.manage_settings ? '' : 'none'; // تبويب الإعدادات
+            navItems[2].style.display = (perms.collect_debt || perms.add_expense || perms.view_cash) ? '' : 'none'; // المالية
+            navItems[3].style.display = perms.reports ? '' : 'none'; // التقارير
+            navItems[4].style.display = 'none'; // الإعدادات مخفية دائماً عن المندوب
         }
 
-        // 6. أزرار المالية التفصيلية
+        // 6. أزرار قسم المالية
         setVisible('button[onclick*="collectDebt"]', perms.collect_debt !== false);
         setVisible('button[onclick*="addExpense"]', perms.add_expense === true);
         setVisible('button[onclick*="viewAvailableCash"]', perms.view_cash === true);
-        setVisible('button[onclick*="viewAgentWallet"]', perms.agent_wallet === true);
-        setVisible('button[onclick*="payManager"]', perms.pay_manager === true);
-
-        // 7. وضع التخفي
-        setVisible('button[onclick*="agentGhostMode"]', perms.ghost_mode === true);
     }
 
 // =====================================================================
