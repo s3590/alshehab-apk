@@ -7095,7 +7095,7 @@ async function fetchClientPermission(clientId) {
                 document.getElementById('api-logs-container').innerHTML = logsHtml;
             }
             
-            // 🌟 التعديل الجذري: دخول المندوب الميداني (الوكيل الفرعي) 🌟
+            // 🌟 التعديل الجذري: دخول المندوب الميداني (الوكيل الفرعي) وتحديث صلاحياته لحظياً 🌟
             else if (data.role === 'sub_agent') {
                 let settingsBtn = document.getElementById('settings-btn');
                 if(settingsBtn) settingsBtn.style.display = 'block';
@@ -7107,6 +7107,23 @@ async function fetchClientPermission(clientId) {
                 applyRoleTheme('agent'); // نستخدم نفس لون وثيم الوكيل
                 document.getElementById('welcome-msg').innerText = getSmartGreeting(data.name + " 🛵 (مندوب)");
                 
+                // 🌟 السحر هنا: مقارنة الصلاحيات الجديدة بالقادمة من السيرفر وتحديث التوكن بصمت إذا تغيرت
+                try {
+                    let token = localStorage.getItem('auth_token');
+                    let payload = JSON.parse(atob(token.split('.')[1]));
+                    let oldPerms = JSON.stringify(payload.perms || {});
+                    let newPerms = JSON.stringify(data.perms || {});
+                    
+                    if (oldPerms !== newPerms) {
+                        console.log("🔄 تم اكتشاف تغيير في صلاحيات المندوب، جاري التحديث...");
+                        silentRefreshToken().then(() => {
+                            applySubAgentPermissions();
+                            showAgentScreen();
+                        });
+                        return; // نوقف التنفيذ حتى يتجدد التوكن
+                    }
+                } catch(e) {}
+
                 // فتح شاشة الوكيل (وستقوم دالة showAgentScreen ببتر الأزرار حسب الصلاحيات)
                 showAgentScreen();
             }
@@ -7662,30 +7679,50 @@ function renderSubAgentsListDialog() {
     });
 }
 
-// 🌟 دالة فتح واستعراض تقرير نشاط المندوب وإرساله للتليجرام
-    async function openSubAgentReport(subId, subName) {
+    // 🌟 دالة اختيار فترة التقرير للمندوب
+    async function showActivityReport(subId) {
+        let choice = await smartSelect("نوع التقرير", [
+            { value: 'today', text: '📅 تقرير اليوم الميداني', icon: 'fa-calendar-day', color: '#00d2ff' },
+            { value: 'custom', text: '📆 تقرير العهدة (فترة مخصصة)', icon: 'fa-calendar-alt', color: '#f5af19' }
+        ]);
+        if (!choice) return;
+
+        let startDate = new Date().toISOString().split('T')[0];
+        let endDate = startDate;
+
+        if (choice === 'custom') {
+            startDate = await smartDialog({ type: 'prompt', title: 'من تاريخ', message: 'اختر تاريخ بداية العهدة:', inputType: 'date', color: '#38ef7d' });
+            if (!startDate) return;
+            
+            endDate = await smartDialog({ type: 'prompt', title: 'إلى تاريخ', message: 'اختر تاريخ نهاية العهدة (اليوم):', inputType: 'date', color: '#f5af19' });
+            if (!endDate) return;
+        }
+
+        openSubAgentReport(subId, startDate, endDate);
+    }
+
+    // 🌟 دالة فتح واستعراض تقرير نشاط المندوب
+    async function openSubAgentReport(subId, startDate, endDate) {
         playSound('click');
         showToast("⏳ جاري استخراج تقرير نشاط المندوب...", "warning");
 
         try {
-            let todayStr = new Date().toISOString().split('T')[0];
             let fd = new FormData();
             fd.append('sub_id', subId);
-            fd.append('date', todayStr);
+            fd.append('start_date', startDate);
+            fd.append('end_date', endDate);
 
             let res = await safeFetch('/api/sub_agent_activity_report', fd);
             if (res.status === 'success') {
                 let html = `
                 <div style="text-align: right; max-height: 420px; overflow-y: auto; padding: 5px; font-size: 13px; line-height: 1.6;">
                     
-                    <!-- بطاقة الخلاصة الكبرى -->
                     <div style="background: rgba(56, 239, 125, 0.1); border: 1px solid #38ef7d; border-radius: 12px; padding: 12px; margin-bottom: 15px; text-align: center;">
-                        <span style="color:#ccc; font-size:11px;">صافي الكاش المتوفر مع المندوب لهذا اليوم:</span>
+                        <span style="color:#ccc; font-size:11px;">صافي الكاش المستلم خلال الفترة:</span>
                         <h2 style="color:#38ef7d; font-size:24px; margin: 4px 0;">${fmtNum(res.net_cash_in_hand)} <span style="font-size:13px;">ريال</span></h2>
                         <small style="color:#f5af19;">إجمالي الكروت المسلمة: <b>${res.total_cards_count} كرت</b> (${fmtNum(res.total_delivered_amount)} ريال)</small>
                     </div>
 
-                    <!-- الكروت المسلمة للبقالات -->
                     <h4 style="color:#00d2ff; margin-bottom: 6px; border-bottom: 1px solid rgba(0,210,255,0.2); padding-bottom: 4px;">
                         📦 الكروت المسلمة للبقالات (${res.cards_delivered.length}):
                     </h4>
@@ -7694,9 +7731,8 @@ function renderSubAgentsListDialog() {
                             <span>🏪 ${escapeHTML(c.client)}: <small style="color:#aaa;">${escapeHTML(c.details)}</small></span>
                             <strong style="color:gold;">${fmtNum(c.amount)} ر.ي</strong>
                         </div>
-                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يقم بتسليم كروت اليوم.</div>'}
+                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يقم بتسليم كروت.</div>'}
 
-                    <!-- الكاش المقبوض من البقالات -->
                     <h4 style="color:#38ef7d; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(56,239,125,0.2); padding-bottom: 4px;">
                         💵 الكاش المقبوض من الديون (${res.debt_collected.length}):
                     </h4>
@@ -7705,9 +7741,8 @@ function renderSubAgentsListDialog() {
                             <span>🏪 قبض من: <b>${escapeHTML(d.client)}</b></span>
                             <strong style="color:#38ef7d;">${fmtNum(d.amount)} ر.ي</strong>
                         </div>
-                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يتم تحصيل كاش اليوم.</div>'}
+                    `).join('') : '<div style="color:#888; font-size:11px; margin-bottom:8px;">لم يتم تحصيل كاش.</div>'}
 
-                    <!-- مبيعات الطياري إن وجدت -->
                     ${res.walkin_sales.length > 0 ? `
                         <h4 style="color:#f5af19; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(245,175,25,0.2); padding-bottom: 4px;">
                             🛒 مبيعات الطياري (كاش):
@@ -7720,7 +7755,6 @@ function renderSubAgentsListDialog() {
                         `).join('')}
                     ` : ''}
 
-                    <!-- المصروفات إن وجدت -->
                     ${res.expenses.length > 0 ? `
                         <h4 style="color:#ff4757; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,71,87,0.2); padding-bottom: 4px;">
                             💸 المصروفات المسجلة:
@@ -7733,9 +7767,8 @@ function renderSubAgentsListDialog() {
                         `).join('')}
                     ` : ''}
 
-                    <!-- زر الإرسال لتليجرام الوكيل -->
-                    <button class="btn btn-outline" style="width:100%; margin-top:15px; border-color:#00d2ff; color:#00d2ff;" onclick="sendSubAgentReportToTelegram(${subId}, '${todayStr}')">
-                        <i class="fab fa-telegram-plane"></i> 📲 إرسال التقرير الكامل لتليجرام الوكيل
+                    <button class="btn btn-outline" style="width:100%; margin-top:15px; border-color:#00d2ff; color:#00d2ff;" onclick="sendSubAgentReportToTelegram(${subId}, '${res.start_date}', '${res.end_date}')">
+                        <i class="fab fa-telegram-plane"></i> 📲 إرسال التقرير لتليجرام
                     </button>
                     <button class="btn btn-dark" style="width:100%; margin-top:8px;" onclick="openSubAgentManagement()">
                         <i class="fas fa-arrow-right"></i> رجوع للمناديب
@@ -7744,26 +7777,26 @@ function renderSubAgentsListDialog() {
 
                 smartDialog({
                     type: 'alert',
-                    title: `📋 نشاط: ${res.sub_name} (${todayStr})`,
+                    title: `📋 تقرير: ${res.sub_name} (${res.period})`,
                     message: html,
                     icon: 'fa-file-invoice',
                     color: '#f5af19'
                 });
             } else {
-                showToast(res.message || "لا توجد حركات مسجلة لهذا اليوم", "warning");
+                showToast(res.message || "لا توجد حركات مسجلة", "warning");
             }
         } catch(e) {
-            showToast("خطأ في الاتصال بالخادم", "error");
+            showToast("خطأ في الاتصال", "error");
         }
     }
 
-    // دالة إرسال التقرير لتليجرام بنقرة واحدة
-    async function sendSubAgentReportToTelegram(subId, dateStr) {
+    async function sendSubAgentReportToTelegram(subId, startDate, endDate) {
         showToast("⏳ جاري إرسال التقرير إلى تليجرام...", "warning");
         try {
             let fd = new FormData();
             fd.append('sub_id', subId);
-            fd.append('date', dateStr);
+            fd.append('start_date', startDate);
+            fd.append('end_date', endDate);
             fd.append('send_telegram', 'true');
 
             let res = await safeFetch('/api/sub_agent_activity_report', fd);
@@ -7773,10 +7806,9 @@ function renderSubAgentsListDialog() {
             } else {
                 showToast(res.message || "تعذر الإرسال", "error");
             }
-        } catch(e) {
-            showToast("خطأ في الاتصال", "error");
-        }
+        } catch(e) { showToast("خطأ في الاتصال", "error"); }
     }
+
     // 2. فتح نافذة إضافة أو تعديل المندوب بمربعات الاختيار (Checkboxes)
     function openSubAgentForm(subId = null) {
         document.getElementById('smart-dialog-overlay').style.display = 'none';
