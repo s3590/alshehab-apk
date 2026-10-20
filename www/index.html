@@ -4963,7 +4963,7 @@ async function orderNetworkCards() {
             if (cached) data = JSON.parse(cached);
         }
 
-        if(data && data.status === 'success') {
+        if(data && data.status === 'success') {           
             let userRole = localStorage.getItem('user_role');
             let perms = {};
             try {
@@ -4974,7 +4974,7 @@ async function orderNetworkCards() {
             let canViewProfits = (userRole !== 'sub_agent') || (perms.view_profits === true);
             let canViewDebt = (userRole !== 'sub_agent') || (perms.view_debt === true);
 
-            // 🌟 القسم الأول: خزينتي (محمية من المندوب)
+            // 🌟 1. خزينتي ومخزوني (الأمامي والخلفي محمي بالكامل)
             if (canViewProfits) {
                 smartAnimate('agent-cards-cash', data.cards_cash);
                 smartAnimate('agent-telecom-cash', data.telecom_cash);
@@ -4984,12 +4984,14 @@ async function orderNetworkCards() {
                     smartAnimate('detail-agent-inv', data.detail_agent_inv);
                 }
             } else {
-                ['agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value'].forEach(id => {
-                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                // 🔒 تشفير الوجه الأمامي والخلفي التابع للمخزون والكاش
+                ['agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value', 'detail-mgr-inv', 'detail-agent-inv'].forEach(id => {
+                    let el = document.getElementById(id);
+                    if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold; font-size:16px;'>***</span>";
                 });
             }
-            
-            // 🌟 القسم الثاني: أموالي في السوق (محمية من المندوب)
+
+            // 🌟 2. ديون السوق والكاش الجاهز (الأمامي والخلفي محمي بالكامل)
             if (canViewDebt) {
                 smartAnimate('agent-market-debt', data.market_debt);
                 if(document.getElementById('detail-mgr-debt')) {
@@ -4998,25 +5000,30 @@ async function orderNetworkCards() {
                 }
                 let totalReady = (parseFloat(data.total_ready_cards_cash) || 0) + (parseFloat(data.total_ready_telecom_cash) || 0);
                 smartAnimate('agent-ready-cash', totalReady);
+                window.readyCashDetails = data.ready_cash_list || [];
             } else {
-                ['agent-market-debt', 'agent-ready-cash'].forEach(id => {
-                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                // 🔒 تشفير ديون السوق والوجه الخلفي والكاش الجاهز وتفريغ القائمة
+                ['agent-market-debt', 'detail-mgr-debt', 'detail-agent-debt', 'agent-ready-cash'].forEach(id => {
+                    let el = document.getElementById(id);
+                    if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold; font-size:16px;'>***</span>";
                 });
+                window.readyCashDetails = []; // إفراغ البيانات من ذاكرة المتصفح
             }
-            window.readyCashDetails = data.ready_cash_list || [];
-            
-            // 🌟 القسم الثالث: أرباحي والتزاماتي (محمية تماماً من المندوب)
+
+            // 🌟 3. أرباحي والتزاماتي (محمية ومقفل فتحها)
             if (canViewProfits) {
                 smartAnimate('agent-pending-profit', data.agent_pending_profit);
                 smartAnimate('agent-live-profit', data.agent_total_profit);
                 smartAnimate('agent-required-remit', data.required_to_remit);
+                window.pendingProfitsDetails = data.pending_profits_list || [];
             } else {
                 ['agent-pending-profit', 'agent-live-profit', 'agent-required-remit'].forEach(id => {
-                    let el = document.getElementById(id); if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold;'>***</span>";
+                    let el = document.getElementById(id);
+                    if (el) el.innerHTML = "<span style='color:#aaa; font-weight:bold; font-size:16px;'>***</span>";
                 });
+                window.pendingProfitsDetails = []; // إفراغ الأرباح من ذاكرة المتصفح
             }
-            window.pendingProfitsDetails = data.pending_profits_list || []; 
-            
+
             // القسم الرابع: الأداء الشهري
             smartAnimate('agent-monthly-clients', data.monthly_clients_sales); 
             smartAnimate('agent-monthly-walkin', data.monthly_walkin_sales); 
@@ -5024,8 +5031,19 @@ async function orderNetworkCards() {
         }
     }
 
-        // 1. دالة عرض تفاصيل الكاش الجاهز (محدثة لتدعم العزل المالي وتجميل الأرقام)
+// 🌟 حماية تفاصيل الكاش الجاهز بالبقالات عند النقر
     function showReadyCashDetails() {
+        let userRole = localStorage.getItem('user_role');
+        let perms = {};
+        try {
+            let token = localStorage.getItem('auth_token');
+            if(token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
+        } catch(e) {}
+
+        if (userRole === 'sub_agent' && perms.view_debt !== true) {
+            return showToast("🔒 ليس لديك صلاحية لعرض تفاصيل كاش البقالات", "warning");
+        }
+
         playSound('click');
         let details = window.readyCashDetails;
         if (!details || details.length === 0) return showToast("لا يوجد كاش جاهز للتحصيل حالياً.", "warning");
@@ -5055,8 +5073,19 @@ async function orderNetworkCards() {
         });
     }
 
-    // 2. دالة عرض تفاصيل الأرباح المعلقة
+    // 🌟 حماية تفاصيل الأرباح المعلقة عند النقر
     function showPendingProfitsDetails() {
+        let userRole = localStorage.getItem('user_role');
+        let perms = {};
+        try {
+            let token = localStorage.getItem('auth_token');
+            if(token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
+        } catch(e) {}
+
+        if (userRole === 'sub_agent' && perms.view_profits !== true) {
+            return showToast("🔒 ليس لديك صلاحية للاطلاع على تفاصيل الأرباح", "warning");
+        }
+
         playSound('click');
         let details = window.pendingProfitsDetails;
         if (!details || details.length === 0) return showToast("لا يوجد أرباح معلقة بالسوق حالياً.", "warning");
@@ -9976,7 +10005,7 @@ async function syncTelecomPackages() {
         btnElement.classList.add('active');
     }
 
-// 🌟 دالة تطبيق الصلاحيات الشاملة وإخفاء/إظهار أزرار شاشة المندوب 🌟
+// 🌟 دالة تطبيق الصلاحيات الشاملة للمندوب وحجب الأقسام غير المصرح بها 🌟
     function applySubAgentPermissions() {
         let perms = {};
         try {
@@ -9987,53 +10016,64 @@ async function syncTelecomPackages() {
             }
         } catch(e) {}
 
-        // دالة مساعدة لإظهار/إخفاء عنصر بأمان
         const setVisible = (selector, isVisible) => {
             document.querySelectorAll(selector).forEach(el => {
                 if (el) el.style.display = isVisible ? '' : 'none';
             });
         };
 
-        // 1. العمى المالي (الأرباح ورأس المال وصافي توريد المدير)
+        // 1. العمى المالي (إخفاء الأرباح والكاش الصافي للمدير وتشفير الوجهين)
         if (perms.view_profits !== true) {
             let profitBoxes = [
                 'agent-cards-cash', 'agent-telecom-cash', 'agent-inventory-value', 
                 'agent-pending-profit', 'agent-live-profit', 'agent-required-remit',
-                'detail-mgr-inv', 'detail-agent-inv', 'detail-mgr-debt', 'detail-agent-debt'
+                'detail-mgr-inv', 'detail-agent-inv'
             ];
             profitBoxes.forEach(id => {
                 let el = document.getElementById(id);
-                if (el) el.innerHTML = "<span style='font-size:22px; color:#aaa; font-weight:bold;'>***</span>";
+                if (el) el.innerHTML = "<span style='font-size:20px; color:#aaa; font-weight:bold;'>***</span>";
             });
         }
 
-        // 2. إخفاء الديون الإجمالية والكاش الجاهز بالبقالات
+        // 2. إخفاء الديون الشاملة وتشفير الوجهين
         if (perms.view_debt !== true) {
-            let el = document.getElementById('agent-market-debt');
-            if (el) el.innerHTML = "<span style='font-size:22px; color:#aaa; font-weight:bold;'>***</span>";
-            let readyCash = document.getElementById('agent-ready-cash');
-            if (readyCash) readyCash.innerHTML = "<span style='font-size:22px; color:#38ef7d; font-weight:bold;'>***</span>";
+            let debtBoxes = [
+                'agent-market-debt', 'detail-mgr-debt', 'detail-agent-debt', 'agent-ready-cash'
+            ];
+            debtBoxes.forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.innerHTML = "<span style='font-size:20px; color:#aaa; font-weight:bold;'>***</span>";
+            });
         }
 
-        // 3. قسم الخدمات الإلكترونية (شحن فوري وباقات - ميزة الوكيل الخاصة)
+        // 🔒 إلغاء تأثير القلب (Flip) للمندوب لكي لا ينقلب المربع ولا تظهر الأرقام الخلفية عند لمسه
+        if (perms.view_profits !== true || perms.view_debt !== true) {
+            document.querySelectorAll('.flip-container').forEach(c => {
+                c.style.pointerEvents = 'none'; // تعطيل اللمس والقلب نهائياً للمندوب
+            });
+        }
+
+        // 3. قسم الخدمات الإلكترونية (شحن فوري وباقات - ميزة الوكيل)
         setVisible('button[onclick*="telecomApp.showDashboard"]', perms.telecom === true);
 
         // 4. العمليات الميدانية
-        setVisible('button[onclick*="agent-give-screen"]', perms.cards_sell !== false); // افتراضي مسموح إلا إذا عطلته
+        setVisible('button[onclick*="agent-give-screen"]', perms.cards_sell !== false);
         setVisible('button[onclick*="agentQuickSale"]', perms.quick_sale !== false);
         setVisible('button[onclick*="startTransferWizard"]', perms.transfer === true);
+        
+        // 🔒 إخفاء التوالف والمرتجعات ورفع الصور ومطابقة الإرساليات عن المندوب إلا بصلاحية صريحة
         setVisible('button[onclick*="startReturnWizard"]', perms.returns === true);
-        setVisible('button[onclick*="agentReceiveCards"], button[onclick*="agentReceiveECards"]', perms.receive_shipment === true);
+        setVisible('button[onclick*="viewSupportTickets"]', perms.returns === true); // تذاكر التوالف
+        setVisible('button[onclick*="startAiDailyEntry"]', false); // إدخال بالصورة (رفع صورة الدفتر) مخفي للمندوب دائماً
+        setVisible('button[onclick*="agentReceiveCards"], button[onclick*="agentReceiveECards"]', perms.receive_shipment === true); // مطابقة إرساليات الإدارة
         setVisible('button[onclick*="viewPendingOrders"]', perms.pending_orders === true);
 
-        // 5. شريط التنقل السفلي وأقسام المالية والتقارير والإعدادات
+        // 5. شريط التنقل السفلي (Bottom Nav)
         let navItems = document.querySelectorAll('#agent-bottom-nav .nav-item');
         if (navItems.length >= 5) {
-            // navItems[0] = الرئيسية
-            // navItems[1] = العمليات
-            navItems[2].style.display = (perms.collect_debt || perms.add_expense || perms.view_cash) ? '' : 'none'; // المالية
-            navItems[3].style.display = perms.reports ? '' : 'none'; // التقارير
-            navItems[4].style.display = perms.manage_settings ? '' : 'none'; // الإعدادات
+            navItems[2].style.display = (perms.collect_debt || perms.add_expense || perms.view_cash) ? '' : 'none'; // تبويب المالية
+            navItems[3].style.display = perms.reports ? '' : 'none'; // تبويب التقارير
+            navItems[4].style.display = perms.manage_settings ? '' : 'none'; // تبويب الإعدادات
         }
 
         // 6. أزرار المالية التفصيلية
@@ -10043,27 +10083,22 @@ async function syncTelecomPackages() {
         setVisible('button[onclick*="viewAgentWallet"]', perms.agent_wallet === true);
         setVisible('button[onclick*="payManager"]', perms.pay_manager === true);
 
-        // 7. وضع التخفي لحسابات العملاء
+        // 7. وضع التخفي
         setVisible('button[onclick*="agentGhostMode"]', perms.ghost_mode === true);
     }
 
-// ================= 1. دالة تسليم كروت لعميل (الجرد + الذكاء الاصطناعي + السلة) =================
+// =====================================================================
+// دالة النزول الميداني والجرد والتسليم للبقالة (مطابقة 100% لبوت التليجرام)
+// =====================================================================
 async function giveCardsToClient() {
-    showToast("⏳ جاري جلب البيانات...", "warning");
+    playSound('click');
+    showToast("⏳ جاري جلب قائمة البقالات...", "warning");
+    
     try {
-        // 🌟 1. جلب قائمة العملاء (دعم الأوفلاين)
-        let data;
-        if (navigator.onLine) {
-            let res = await safeGet('/api/network_data');
-            data = await res.json();
-            localStorage.setItem('cached_network_data', JSON.stringify(data));
-        } else {
-            let cached = localStorage.getItem('cached_network_data');
-            if (cached) data = JSON.parse(cached);
-            else return showToast("لا توجد بيانات محفوظة للأوفلاين!", "error");
-        }
-
-        if (data.status !== 'success') return showToast("خطأ في جلب البيانات", "error");
+        // 1. اختيار البقالة
+        let res = await safeGet('/api/network_data');
+        let data = await res.json();
+        if (data.status !== 'success') return showToast("تعذر جلب بيانات البقالات", "error");
 
         let clientsList = data.clients.map(c => ({
             value: c.user_id,
@@ -10072,309 +10107,182 @@ async function giveCardsToClient() {
             color: "#00d2ff"
         }));
 
-        let clientId = await smartSelect("اختر البقالة", clientsList);
+        let clientId = await smartSelect("اختر البقالة لبدء النزول الميداني", clientsList);
         if (!clientId) return;
 
-        // ?? 2. جلب بيانات العميل (دعم الأوفلاين)
-        showToast("⏳ جاري فحص حساب العميل...", "warning");
-        let userData;
-        if (navigator.onLine) {
-            let userRes = await safeGet('/api/user_data/' + clientId);
-            userData = await userRes.json();
-            localStorage.setItem(`cached_user_data_${clientId}`, JSON.stringify(userData));
-        } else {
-            let cachedUser = localStorage.getItem(`cached_user_data_${clientId}`);
-            if (cachedUser) userData = JSON.parse(cachedUser);
-            else return showToast("بيانات العميل غير متوفرة في الأوفلاين!", "error");
-        }
+        // 2. فحص حساب ومخزون العميل الحالي
+        showToast("⏳ جاري فتح سجل مخزون البقالة...", "warning");
+        let userRes = await safeGet('/api/user_data/' + clientId);
+        let userData = await userRes.json();
+        if (userData.status !== 'success') return showToast("تعذر فتح ملف العميل", "error");
 
-        if (userData.status === 'success') {
-            let currentDebt = parseFloat(userData.debt) || 0;
-            let hasInventory = userData.inventory && userData.inventory.length > 0;
+        let clientName = userData.name || "العميل";
+        let currentDebt = parseFloat(userData.debt) || 0;
+        let invItems = userData.inventory || [];
 
-            if (currentDebt > 0 || hasInventory) {
-                let invCount = userData.inventory ? userData.inventory.length : 0;
-                let alertMsg = `هذا العميل لديه عهدة سابقة!    الدين المسجل: <b style='color:#ff4757;'>${currentDebt} ريال</b>  الكروت المسجلة: <b style='color:#f5af19;'>${invCount} فئات</b>    يمنع النظام تسليم كروت جديدة قبل جرد المتبقي وتصفية الحساب.`;
-
-                await smartDialog({
-                    type: 'alert', title: '🚨 إيقاف أمني من النظام!',
-                    message: alertMsg, icon: 'fa-hand-paper', color: '#ff4757'
-                });
-
-                if (hasInventory) {
-                    for (let item of userData.inventory) {
-                        let promptMsg = `مسجل في النظام أن لديه <b>${item.quantity} كرت</b> من فئة (${item.card_type}).    كم المتبقي لديه الآن؟`;
-                        let rem = await smartDialog({
-                            type: 'prompt', title: '📦 جرد المخزون الإجباري',
-                            message: promptMsg, icon: 'fa-box-open', color: '#f5af19', inputType: 'number'
-                        });
-
-                        if (rem === null) return showToast("تم إلغاء العملية", "error");
-
-                        let remQty = parseInt(rem);
-                        // 🌟 التوحيد الشامل: معالجة الزيادة والنقص عبر المحرك المحاسبي المركزي 🌟
-                        if (remQty !== item.quantity) {
-                            let fdPos = new FormData();
-                            fdPos.append('client_id', clientId);
-                            fdPos.append('card_type', item.card_type);
-                            fdPos.append('expected_qty', item.quantity);
-                            fdPos.append('actual_remaining_qty', remQty);
-                            
-                            let adjRes = await safeFetch('/api/record_client_sale', fdPos);
-                            
-                            if (adjRes.status === 'success' && adjRes.adjustment_msg) {
-                                await smartDialog({
-                                    type: 'alert', title: '⚠️ تسوية جرد آلية',
-                                    message: adjRes.adjustment_msg, icon: 'fa-robot', color: '#f5af19'
-                                });
-                            } else if (adjRes.status === 'error') {
-                                return showToast(adjRes.message, "error");
-                            }
-                        }
-                    }
-                }
-
-                // 🌟 3. جلب الكاش الجاهز (دعم الأوفلاين)
-                showToast("⏳ جاري حساب الإجمالي المطلوب...", "warning");
-                let statsData;
-                if (navigator.onLine) {
-                    let statsRes = await safeGet('/api/agent_dashboard_stats');
-                    statsData = await statsRes.json();
-                    localStorage.setItem('cached_agent_stats', JSON.stringify(statsData));
-                } else {
-                    let cachedStats = localStorage.getItem('cached_agent_stats');
-                    if (cachedStats) statsData = JSON.parse(cachedStats);
-                    else statsData = { ready_cash_list: [] };
-                }
-                
-                let clientCashData = statsData.ready_cash_list ? statsData.ready_cash_list.find(c => c.name === userData.name) : null;
-                let finalDebt = clientCashData ? clientCashData.cash : 0;
-
-                let retryLoop = true;
-                while (retryLoop) {
-                    let cashMsg = `إجمالي المطلوب تسديده الآن هو: <b style='color:#ff4757; font-size:18px;'>${finalDebt} ريال</b>    كم المبلغ الكاش الذي استلمته منه الآن؟`;
-
-                    let collected = await smartDialog({
-                        type: 'prompt', title: '💰 تصفية الحساب',
-                        message: cashMsg, icon: 'fa-money-bill-wave', color: '#38ef7d', inputType: 'number'
-                    });
-
-                    if (collected === null) return showToast("تم إلغاء العملية", "error");
-
-                    let collectedNum = parseFloat(collected);
-                    if (isNaN(collectedNum) || collectedNum < 0) {
-                        showToast("الرجاء إدخال مبلغ صحيح", "warning");
-                        continue;
-                    }
-
-                    if (collectedNum < finalDebt) {
-                        let errorMsg = `المبلغ المستلم (${collectedNum} ريال) لا يغطي إجمالي المديونية!    يمنع النظام تسليم كروت جديدة لأي عميل لديه متأخرات مالية.    <b style='color:#00d2ff;'>للتجاوز بصلاحيات الإدارة، أدخل الرمز السري:</b>`;
-
-                        let overrideInput = await smartDialog({
-                            type: 'prompt', title: '🚨 رفض أمني من النظام!',
-                            message: errorMsg, icon: 'fa-lock', color: '#ff4757', inputType: 'password'
-                        });
-
-                        if (!overrideInput) return showToast("تم إلغاء العملية", "error");
-
-                        let fdCollect = new FormData();
-                        fdCollect.append('client_id', clientId);
-                        fdCollect.append('amount', collectedNum);
-                        fdCollect.append('override_secret', overrideInput.trim());
-
-                        showToast("⏳ جاري التحقق من صلاحية التجاوز...", "warning");
-                        let overrideRes = await safeFetch('/api/collect', fdCollect);
-                        if (overrideRes.status === 'success') {
-                            playSound('cash');
-                            showToast(overrideRes.message || "✅ تم تسجيل التحصيل الجزئي بصلاحيات خاصة", "success");
-                            retryLoop = false;
-                        } else {
-                            showToast(overrideRes.message || "الرمز غير صحيح أو غير مصرح بالتجاوز", "error");
-                        }
-                    } else {
-                        let fdCollect = new FormData();
-                        fdCollect.append('client_id', clientId);
-                        fdCollect.append('amount', collectedNum);
-                        await safeFetch('/api/collect', fdCollect);
-                        playSound('cash');
-                        showToast("✅ تم تصفية الحساب بنجاح!", "success");
-                        retryLoop = false;
-                    }
-                }
-            }
-        }
-
-        // 🌟 4. الفحص الأمني والذكاء الاصطناعي (دعم الأوفلاين) 🌟
-        showToast("⏳ جاري تحليل احتياج العميل...", "warning");
-        let checkData;
-        if (navigator.onLine) {
-            let checkRes = await safeGet('/api/pre_give_cards_check/' + clientId);
-            checkData = await checkRes.json();
-        } else {
-            // في الأوفلاين، نتخطى فحص الذكاء الاصطناعي ونسمح بالدخول اليدوي مباشرة
-            checkData = { status: 'clear', suggested_order: {} };
-        }
-
-        if (checkData.status === 'blocked') {
-            playSound('error');
-            return await smartDialog({
-                type: 'alert', title: '🚨 إيقاف أمني من النظام!',
-                message: checkData.message.replace(/\n/g, '  '), icon: 'fa-hand-paper', color: '#ff4757'
+        // 🌟 خطوة الجرد الميداني (نفس بوت التليجرام تماماً)
+        if (invItems.length > 0) {
+            let invListHtml = "";
+            invItems.forEach(item => {
+                invListHtml += `<div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
+                                    <span style="color:#fff;">▪️ ${item.card_type}</span>
+                                    <strong style="color:gold;">${item.quantity} كرت</strong>
+                                </div>`;
             });
-        }
 
-        let suggestedOrder = checkData.suggested_order;
-        let useManualEntry = true;
+            let visitDialogHtml = `
+            <div style="text-align: right; font-size: 13px; line-height: 1.6;">
+                <p style="color:#00d2ff; margin-bottom: 8px;">📦 <b>مخزون العميل المسجل في النظام حالياً:</b></p>
+                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 1px solid rgba(0,210,255,0.2);">
+                    ${invListHtml}
+                </div>
+                ${currentDebt > 0 ? `<div style="color:#ff4757; margin-bottom:10px;">🔴 الدين السابق المسجل عليه: <b>${currentDebt} ريال</b></div>` : ''}
+                <p style="color:#ccc; font-size:12px;">هل قمت بمطابقة الدرج والكروت مطابقة (لم يبع شيء)؟ أم تريد إدخال الجرد الفعلي للمتبقي؟</p>
+            </div>`;
 
-        if (suggestedOrder && Object.keys(suggestedOrder).length > 0) {
-            let availableBudget = checkData.available_budget || 0;
-            let suggestionHtml = `<div style="text-align: right; font-size: 13px; line-height: 1.8; background: rgba(0, 210, 255, 0.1); padding: 15px; border-radius: 12px; border: 1px solid #00d2ff; margin-bottom: 15px;">
-                <h4 style="color: #00d2ff; margin-bottom: 10px; text-align: center;"><i class="fas fa-robot"></i> مستشار التموين الذكي</h4>
-                <p style="color: #ccc; margin-bottom: 10px; text-align: center; font-size: 11px;">الميزانية المتاحة للعميل: <b style="color:#38ef7d;">${fmtNum(availableBudget)} ريال</b>  
-بناءً على نواقصه وميزانيته، نقترح هذه السلة:</p>`;
-
-            for (let ctype in suggestedOrder) {
-                suggestionHtml += `<div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 5px 0;">
-                    <span style="color: #fff;">${ctype}</span>
-                    <strong style="color: #38ef7d;">${suggestedOrder[ctype]} كرت</strong>
-                </div>`;
-            }
-            suggestionHtml += `</div>`;
-
-            let action = await smartSelect("كيف تريد التسليم؟", [
-                { value: 'auto', text: '✅ اعتماد نصيحة الذكاء الاصطناعي', icon: 'fa-magic', color: '#38ef7d' },
-                { value: 'manual', text: '✍️ إدخال يدوي (اختيار الفئة والكمية)', icon: 'fa-keyboard', color: '#f5af19' }
+            let auditChoice = await smartSelect(`📍 بدء نزول ميداني: ${clientName}`, [
+                { value: 'match', text: '✅ العدد مطابق في الدرج (لم يبع شيء)', icon: 'fa-check-circle', color: '#38ef7d' },
+                { value: 'audit', text: '✏️ إدخال الجرد الفعلي (حساب المبيعات)', icon: 'fa-calculator', color: '#f5af19' }
             ]);
 
-            if (!action) return;
+            if (!auditChoice) return;
 
-            if (action === 'auto') {
-                useManualEntry = false;
-
-                let fdBulk = new FormData();
-                fdBulk.append('client_id', clientId);
-                fdBulk.append('suggested_order', JSON.stringify(suggestedOrder));
-
-                showToast("⏳ جاري تنفيذ الطلب المجمع...", "warning");
-                let bulkRes = await safeFetch('/api/bulk_give_cards', fdBulk);
-
-                if (bulkRes.status === 'success') {
-                    playSound('success');
-                    if (typeof speakArabic === "function") speakArabic("تم اعتماد الطلبية المجمعة بنجاح");
-                    showToast("✅ تم تسليم الطلبية المجمعة بنجاح!", "success");                    
-                    smartReload(2500);
-                } else {
-                    await smartDialog({
-                        type: 'alert', title: '🚨 رفض أمني!',
-                        message: bulkRes.message.replace(/\n/g, '  '), icon: 'fa-hand-paper', color: '#ff4757'
+            // أ. في حالة إدخال الجرد الفعلي (تصفية المبيعات)
+            if (auditChoice === 'audit') {
+                for (let item of invItems) {
+                    let promptMsg = `مسجل في النظام أن لديه <b>${item.quantity} كرت</b> من فئة (${item.card_type}).<br><br>كم عدد الكروت المتبقية في الدرج الآن؟`;
+                    let rem = await smartDialog({
+                        type: 'prompt',
+                        title: `📦 جرد فئة: ${item.card_type}`,
+                        message: promptMsg,
+                        icon: 'fa-box-open',
+                        color: '#f5af19',
+                        inputType: 'number'
                     });
-                }
-            }
-        }
 
-        // 🌟 5. الإدخال اليدوي (نظام السلة المتعددة) 🌟
-        if (useManualEntry) {
-            let physicalCards = data.inventory.filter(i => !(i.card_type.includes('إلكتروني') || i.card_type.includes('الكتروني')));
-            if (physicalCards.length === 0) return showToast("لا توجد كروت ورقية في المخزون.", "error");
+                    if (rem === null) return showToast("تم إلغاء الجرد", "warning");
+                    let remQty = parseInt(rem);
 
-            let cardsList = physicalCards.map(i => {
-                let match = i.card_type.match(/\d+/);
-                let imgName = match ? match[0] : 'logo';
-                return { value: i.card_type, text: i.card_type, img: `/static/${imgName}.png` };
-            });
+                    if (remQty !== item.quantity) {
+                        let fdPos = new FormData();
+                        fdPos.append('client_id', clientId);
+                        fdPos.append('card_type', item.card_type);
+                        fdPos.append('expected_qty', item.quantity);
+                        fdPos.append('actual_remaining_qty', remQty);
 
-            let manualCart = {};
-            let isAdding = true;
-
-            while (isAdding) {
-                let cardType = await smartSelect("اختر فئة الكرت", cardsList);
-                if (!cardType) break;
-
-                let qtyMsg = `كم عدد كروت (${cardType}) التي تريد تسليمها؟`;
-                let qty = await smartDialog({
-                    type: 'prompt', title: 'الكمية',
-                    message: qtyMsg, icon: 'fa-box', color: '#f5af19', inputType: 'number'
-                });
-
-                if (!qty || qty <= 0) break;
-
-                manualCart[cardType] = (manualCart[cardType] || 0) + parseInt(qty);
-
-                let addMore = await smartDialog({
-                    type: 'confirm', title: 'سلة التسليم',
-                    message: `✅ تمت إضافة ${qty} كرت ${cardType} للسلة.    هل تريد تسليم فئة أخرى لنفس العميل؟`,
-                    icon: 'fa-cart-plus', color: '#38ef7d'
-                });
-
-                if (!addMore) isAdding = false;
-            }
-
-            if (Object.keys(manualCart).length === 0) return showToast("تم إلغاء عملية التسليم.", "warning");
-
-            let fdBulk = new FormData();
-            fdBulk.append('client_id', clientId);
-            fdBulk.append('suggested_order', JSON.stringify(manualCart));
-
-            let retryLoop2 = true;
-            while (retryLoop2) {
-                showToast("⏳ جاري تنفيذ العملية...", "warning");
-
-                let sellRes = await safeFetch('/api/bulk_give_cards', fdBulk);
-
-                if (sellRes.status === 'success') {
-                    // 🌟 سد ثغرة تجميد المخزون: خصم الكروت من شاشة الوكيل محلياً في وضع الأوفلاين
-                    if (!navigator.onLine) {
-                        let netDataStr = localStorage.getItem('cached_network_data');
-                        if (netDataStr) {
-                            let netData = JSON.parse(netDataStr);
-                            for (let ctype in manualCart) {
-                                let invItem = netData.inventory.find(i => i.card_type === ctype);
-                                if (invItem) invItem.quantity = Math.max(0, invItem.quantity - manualCart[ctype]);
-                            }
-                            localStorage.setItem('cached_network_data', JSON.stringify(netData));
+                        let adjRes = await safeFetch('/api/record_client_sale', fdPos);
+                        if (adjRes.status === 'success' && adjRes.adjustment_msg) {
+                            await smartDialog({
+                                type: 'alert',
+                                title: '⚡ تسوية جرد آلية',
+                                message: adjRes.adjustment_msg,
+                                icon: 'fa-robot',
+                                color: '#f5af19'
+                            });
                         }
                     }
-
-                    playSound('success');
-                    if (typeof speakArabic === "function") {
-                        speakArabic("تَمَّ تَسْلِيمُ الكُرُوتِ بِنَجَاح");
-                    }
-                    showToast("✅ تم تسليم الكروت بنجاح!", "success");
-                    
-                    smartReload(3000);
-                    retryLoop2 = false;
-                } else if (sellRes.requires_override) {
-                    let retryMsg = sellRes.message.replace(/\n/g, '  ') + `    <b style="color:#00d2ff;">للتجاوز بصلاحيات الإدارة، أدخل الرمز السري:</b>`;
-                    let retryInput = await smartDialog({
-                        type: 'prompt',
-                        title: '🚨 تحذير: تجاوز السقف!',
-                        message: retryMsg,
-                        icon: 'fa-shield-alt',
-                        color: '#ff4757',
-                        inputType: 'password'
-                    });
-
-                    if (!retryInput) return;
-
-                    fdBulk.delete('override_secret');
-                    fdBulk.append('override_secret', retryInput.trim());
-                } else {
-                    await smartDialog({
-                        type: 'alert',
-                        title: '🚨 رفض أمني!',
-                        message: sellRes.message.replace(/\n/g, '  '),
-                        icon: 'fa-hand-paper',
-                        color: '#ff4757'
-                    });
-                    retryLoop2 = false;
                 }
             }
+
+            // ب. تحصيل الكاش المتاح بعد الجرد (دون إيقاف أو حظر إجباري)
+            let cashCollected = await smartDialog({
+                type: 'prompt',
+                title: '💰 استلام كاش من البقالة',
+                message: `كم المبلغ الكاش الذي استلمته من (${clientName}) الآن؟<br><span style="font-size:11px; color:#aaa;">(أدخل 0 إذا لم يسلمك كاش الآن وتريد تسليمه بالدين)</span>`,
+                icon: 'fa-money-bill-wave',
+                color: '#38ef7d',
+                inputType: 'number',
+                placeholder: '0'
+            });
+
+            if (cashCollected !== null && parseFloat(cashCollected) > 0) {
+                let fdCollect = new FormData();
+                fdCollect.append('client_id', clientId);
+                fdCollect.append('amount', parseFloat(cashCollected));
+                await safeFetch('/api/collect', fdCollect);
+                playSound('cash');
+                showToast(`✅ تم قبض مبلغ ${cashCollected} ريال بنجاح!`, "success");
+            }
         }
+
+        // 3. الانتقال السلس فوراً لتسليم الكروت الجديدة 📦
+        showToast("⏳ جاري فتح شاشة اختيار الكروت الجديدة...", "warning");
+        
+        let netRes = await safeGet('/api/network_data');
+        let netData = await netRes.json();
+        let agentInventory = netData.inventory.filter(i => i.quantity > 0 && !i.card_type.includes('إلكتروني') && !i.card_type.includes('الكتروني'));
+
+        if (agentInventory.length === 0) {
+            return smartDialog({
+                type: 'alert',
+                title: 'المخزون فارغ',
+                message: 'عذراً، مخزون الكروت الورقية المتوفر معك حالياً نفد بالكامل.',
+                icon: 'fa-boxes',
+                color: '#ff4757'
+            });
+        }
+
+        let cardsOptions = agentInventory.map(i => ({
+            value: i.card_type,
+            text: `📦 ${i.card_type} (المتوفر معك: ${i.quantity} كرت)`,
+            icon: 'fa-ticket-alt'
+        }));
+
+        let selectedCard = await smartSelect("اختر فئة الكروت لتسليمها", cardsOptions);
+        if (!selectedCard) return;
+
+        let maxAvailable = (agentInventory.find(i => i.card_type === selectedCard) || {}).quantity || 1;
+        let qty = await smartDialog({
+            type: 'prompt',
+            title: `كمية كروت فئة (${selectedCard})`,
+            message: `أدخل الكمية التي تريد تسليمها للبقالة (الحد الأقصى معك: ${maxAvailable}):`,
+            icon: 'fa-hashtag',
+            color: '#38ef7d',
+            inputType: 'number'
+        });
+
+        if (!qty || parseInt(qty) <= 0) return showToast("تم إلغاء التسليم", "warning");
+
+        let paymentType = await smartSelect("طريقة الدفع للبضاعة الجديدة", [
+            { value: 'credit', text: '📝 آجل (دين على البقالة)', icon: 'fa-file-invoice-dollar', color: '#ff4757' },
+            { value: 'cash', text: '💵 نقداً (كاش فوري تم استلامه)', icon: 'fa-money-bill-wave', color: '#38ef7d' }
+        ]);
+
+        if (!paymentType) return;
+
+        showToast("⏳ جاري اعتماد تسليم الكروت للبقالة...", "warning");
+        let fdSell = new FormData();
+        fdSell.append('client_id', clientId);
+        fdSell.append('card_type', selectedCard);
+        fdSell.append('quantity', parseInt(qty));
+        fdSell.append('payment_type', paymentType);
+
+        let sellRes = await safeFetch('/api/sell', fdSell);
+        if (sellRes.status === 'success') {
+            playSound('success');
+            smartDialog({
+                type: 'alert',
+                title: 'تم التسليم بنجاح ✨',
+                message: sellRes.message || `تم تسليم ${qty} كرت من فئة (${selectedCard}) للبقالة بنجاح.`,
+                icon: 'fa-check-circle',
+                color: '#38ef7d'
+            });
+            smartReload(2500);
+        } else {
+            smartDialog({
+                type: 'alert',
+                title: 'تعذر التسليم',
+                message: sellRes.message || 'حدث خطأ أثناء التسليم.',
+                icon: 'fa-exclamation-triangle',
+                color: '#ff4757'
+            });
+        }
+
     } catch (e) {
-        showToast("خطأ في الاتصال", "error");
+        console.error("Field delivery error:", e);
+        showToast("حدث خطأ أثناء العملية", "error");
     }
 }
-
     // ================= دالة تحصيل ديون الرصيد (مع الحارس الأمني) =================
     async function collectTelecomDebt() {
         showToast("⏳ جاري جلب قائمة البقالات...", "warning");
