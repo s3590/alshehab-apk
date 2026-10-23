@@ -1618,8 +1618,28 @@
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #00d2ff; border-color: #00d2ff;" onclick="agentReceiveECards()"><i class="fas fa-paste"></i> استلام إلكتروني</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ed213a; border-color: #ed213a;" onclick="viewSupportTickets()"><i class="fas fa-ticket-alt"></i> تذاكر التوالف</button>
     </div>
-    
+    <!-- 🛰️ لوحة المراقبة اللحظية (للوكيل فقط) -->
+<button id="live-monitor-btn" class="btn vip-glow" style="width: 100%; margin-top: 10px; font-size: 14px; color: #000; background: linear-gradient(to right, #ffa502, #ff6348); font-weight: bold; padding: 12px; display: none;" onclick="openLiveMonitor()">
+    <i class="fas fa-satellite-dish"></i> 🛰️ لوحة المراقبة اللحظية
+</button>
     <button class="btn btn-outline" style="width: 100%; margin-top: 10px; font-size: 13px; color: #8e2de2; border-color: #8e2de2;" onclick="agentGhostMode()"><i class="fas fa-mask"></i> دخول لحساب عميل (تخفي)</button>
+
+<!-- 🛵 أزرار المندوب (تظهر بحسب الصلاحيات) -->
+<button id="sub-agent-trips-btn" class="btn vip-glow" style="width: 100%; margin-top: 10px; font-size: 14px; color: #000; background: linear-gradient(to right, #00d2ff, #3a7bd5); font-weight: bold; padding: 12px; display: none;" onclick="openSubAgentTrips()">
+    <i class="fas fa-route"></i> 🛵 رحلاتي الميدانية
+</button>
+
+<button id="sub-agent-create-trip-btn" class="btn" style="width: 100%; margin-top: 8px; font-size: 13px; color: #38ef7d; border: 1px solid #38ef7d; background: rgba(56, 239, 125, 0.1); font-weight: bold; padding: 10px; display: none;" onclick="subAgentCreateTripSelf()">
+    <i class="fas fa-plus-circle"></i> ➕ فتح رحلة جديدة بنفسي
+</button>
+
+<button id="sub-agent-all-clients-btn" class="btn" style="width: 100%; margin-top: 8px; font-size: 13px; color: #f5af19; border: 1px solid #f5af19; background: rgba(245, 175, 25, 0.1); font-weight: bold; padding: 10px; display: none;" onclick="subAgentViewAllClients()">
+    <i class="fas fa-store"></i> 🏪 عرض كل البقالات
+</button>
+
+<button id="sub-agent-all-debts-btn" class="btn" style="width: 100%; margin-top: 8px; font-size: 13px; color: #ff4757; border: 1px solid #ff4757; background: rgba(255, 71, 87, 0.1); font-weight: bold; padding: 10px; display: none;" onclick="subAgentViewAllDebts()">
+    <i class="fas fa-money-bill-wave"></i> 💰 تفاصيل ديون البقالات
+</button>
 </div>
 
 <!-- ================= 3. قسم التقارير والجرد ================= -->
@@ -2717,9 +2737,21 @@ async function checkForUpdates() {
                 }
             } else if (action.route === 'tickets') {
                 if (typeof viewSupportTickets === 'function') viewSupportTickets();
+            } else if (action.route === 'trips') {
+                let userRole = localStorage.getItem('user_role');
+                if (currentUserId === ADMIN_ID && typeof openTripsManager === 'function') {
+                    openTripsManager();
+                } else if (userRole === 'sub_agent' && typeof openSubAgentTrips === 'function') {
+                    openSubAgentTrips();
+                }
             } else if (action.route === 'telecom') {
-                if (typeof telecomApp !== 'undefined') {
-                    let sourceScreen = (currentUserId === ADMIN_ID || currentUserId === MANAGER_ID) ? 'agent-operations-screen' : 'client-lobby-screen';
+                // 🚨 حماية: المدير ممنوع نهائياً من دخول قسم التسديدات
+                if (currentUserId === MANAGER_ID) {
+                    // تجاهل تام
+                } else if (typeof telecomApp !== 'undefined') {
+                    let sourceScreen = (currentUserId === ADMIN_ID || currentUserId === 888888) 
+                        ? 'agent-operations-screen' 
+                        : 'client-lobby-screen';
                     telecomApp.showDashboard(sourceScreen);
                 }
             } else if (action.route === 'pos') {
@@ -5519,22 +5551,29 @@ ${summary}    هل أنت متأكد من إرسالها للوكيل؟`,
                 let amount = await smartDialog({
                     type: 'prompt', 
                     title: 'تحصيل ديون',
-                    message: 'أدخل المبلغ الكاش الذي استلمته من البقالة (بالريال):',
+                    message: 'أدخل المبلغ الكاش الذي استلمته من البقالة (بالريال):\n<small style="color:#f5af19;">(أضف # في النهاية للتجاوز — أو ## إن كنت مندوباً)</small>',
                     icon: 'fa-money-bill-wave', 
                     color: '#38ef7d', 
-                    inputType: 'number'
+                    inputType: 'text'
                 });
 
-                if (!amount || amount <= 0) return;
+                if (!amount) return;
+                
+                let override = '';
+                let amountStr = String(amount).trim();
+                if (amountStr.endsWith('##')) { override = '##'; amountStr = amountStr.slice(0, -2); }
+                else if (amountStr.endsWith('#')) { override = '#'; amountStr = amountStr.slice(0, -1); }
+                
+                let amountNum = parseFloat(amountStr);
+                if (isNaN(amountNum) || amountNum <= 0) return showToast("مبلغ غير صالح", "warning");
 
-                // 🌟 سد ثغرة النقر المزدوج في التحصيل (لمنع خصم الدين مرتين بالخطأ)
                 let transactionUUID = generateUUID();
 
-                // إرسال الطلب للسيرفر
                 let fd = new FormData();
                 fd.append('client_id', clientId);
-                fd.append('amount', amount);
-                fd.append('txn_uuid', transactionUUID); // 👈 إرسال المفتاح للسيرفر
+                fd.append('amount', amountNum);
+                fd.append('txn_uuid', transactionUUID);
+                if (override) fd.append('override_secret', override);
 
                 await executeApiAction('/api/collect', fd, "⏳ جاري تسجيل التحصيل...", () => {
                     // 🌟 سد ثغرة التحصيل المزدوج: إنقاص دين البقالة من الشاشة محلياً في وضع الأوفلاين
@@ -7591,10 +7630,281 @@ async function fetchClientPermission(clientId) {
 
         // 6. الإدارة والتخفي
         { key: 'ghost_mode', label: '👻 وضع التخفي والدخول لحسابات البقالات', group: 'الإدارة والأمان', desc: 'معاينة حساب العميل كما يراه بنفسه' },
-        { key: 'manage_settings', label: '⚙️ الوصول لقسم الإعدادات', group: 'الإدارة والأمان', desc: 'فتح تبويب الإعدادات العامة' }
+        { key: 'manage_settings', label: '⚙️ الوصول لقسم الإعدادات', group: 'الإدارة والأمان', desc: 'فتح تبويب الإعدادات العامة' },
+
+        // 7. 🛵 الرحلات الميدانية (جديد)
+        { key: 'view_all_clients', label: '🏪 عرض كل البقالات', group: '🛵 الرحلات الميدانية', desc: 'فتح قائمة كاملة بجميع البقالات للتصفح والزيارة' },
+        { key: 'view_all_debts', label: '💰 رؤية تفاصيل ديون البقالات', group: '🛵 الرحلات الميدانية', desc: 'عرض كل بقالة مع دينها الحالي (مفيد للتحصيل)' },
+        { key: 'create_trips_self', label: '➕ فتح رحلات بدون إذن الوكيل', group: '🛵 الرحلات الميدانية', desc: 'يستطيع بدء رحلة ميدانية بنفسه دون انتظار موافقة' }
     ];
 
     window.currentSubAgentsList = [];
+
+// =====================================================================
+// 🛵 نظام الرحلات (Agent Trips UI)
+// =====================================================================
+
+async function openTripsManager() {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    showToast("⏳ جاري جلب الرحلات...", "warning");
+    
+    try {
+        let res = await safeGet('/api/trips/my');
+        let data = await res.json();
+        
+        if (data.status !== 'success') {
+            return showToast("خطأ في جلب الرحلات", "error");
+        }
+        
+        let html = `<div style="max-height: 450px; overflow-y: auto; text-align: right; padding: 4px;">`;
+        
+        // زر إنشاء رحلة جديدة
+        html += `<button class="btn btn-retail" style="width: 100%; margin-bottom: 12px; font-weight:bold;" onclick="createTripWizard()">
+                    <i class="fas fa-plus-circle"></i> 🛵 إنشاء رحلة جديدة
+                 </button>`;
+        
+        if (data.trips.length === 0) {
+            html += `<div style="text-align: center; color: #aaa; padding: 30px 10px;">
+                        <i class="fas fa-route" style="font-size: 40px; color: #555; margin-bottom: 10px; display: block;"></i>
+                        لا توجد رحلات بعد.<br><small>اضغط "إنشاء رحلة جديدة" للبدء</small>
+                     </div>`;
+        } else {
+            data.trips.forEach(trip => {
+                let statusInfo = getTripStatusInfo(trip.status);
+                let tripDate = trip.trip_date || trip.created_at || 'غير محدد';
+                
+                html += `
+                <div onclick="viewTripDetails(${trip.id})" style="background: rgba(15, 23, 42, 0.9); border: 1px solid ${statusInfo.color}; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative;">
+                    <div style="position: absolute; top: 8px; left: 8px; background: ${statusInfo.color}22; color: ${statusInfo.color}; padding: 3px 8px; border-radius: 8px; font-size: 10px; font-weight: bold; border: 1px solid ${statusInfo.color};">
+                        ${statusInfo.icon} ${statusInfo.label}
+                    </div>
+                    <div style="font-weight: 900; color: #00d2ff; font-size: 15px; margin-bottom: 4px;">
+                        🛵 الرحلة #${trip.id}
+                    </div>
+                    <div style="color: #ccc; font-size: 12px; margin-bottom: 8px;">
+                        👤 ${trip.agent_name || 'مندوب'} • 📅 ${tripDate}
+                    </div>
+                    <div style="display: flex; gap: 10px; font-size: 11px; color: #fff; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+                        <span>💰 ${fmtNum(trip.total_cash_collected)} ر.ي</span>
+                        <span>🔢 ${trip.transactions_count} عملية</span>
+                    </div>
+                </div>`;
+            });
+        }
+        
+        html += `</div>`;
+        html += `<button class="btn btn-dark" style="width: 100%; margin-top: 10px;" onclick="openSubAgentManagement()">
+                    <i class="fas fa-arrow-right"></i> رجوع للمناديب
+                 </button>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: '🛵 الرحلات',
+            message: html,
+            icon: 'fa-route',
+            color: '#00d2ff'
+        });
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
+
+function getTripStatusInfo(status) {
+    switch(status) {
+        case 'pending': return { label: 'بانتظار القبول', icon: '⏳', color: '#f5af19' };
+        case 'in_progress': return { label: 'جارية', icon: '🛵', color: '#00d2ff' };
+        case 'completed': return { label: 'مكتملة', icon: '✅', color: '#38ef7d' };
+        case 'cancelled': return { label: 'ملغاة', icon: '❌', color: '#ff4757' };
+        default: return { label: status, icon: '•', color: '#aaa' };
+    }
+}
+
+async function createTripWizard() {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    showToast("⏳ جاري جلب المناديب...", "warning");
+    
+    try {
+        // 1. جلب المناديب
+        let res = await safeGet('/api/manage_sub_agents?action=get');
+        // fallback: استخدم نفس الـ endpoint
+        let fd = new FormData();
+        fd.append('action', 'get');
+        let data = await safeFetch('/api/manage_sub_agents', fd);
+        
+        if (!data || data.status !== 'success' || !data.sub_agents || data.sub_agents.length === 0) {
+            return smartDialog({
+                type: 'alert', title: 'لا يوجد مناديب',
+                message: 'يجب إضافة مندوب أولاً قبل إنشاء الرحلة.',
+                icon: 'fa-info-circle', color: '#f5af19'
+            });
+        }
+        
+        // 2. اختيار المندوب
+        let agentOptions = data.sub_agents.map(s => ({
+            value: s.user_id,
+            text: s.name,
+            icon: 'fa-user-tie',
+            color: '#00d2ff'
+        }));
+        
+        let agentId = await smartSelect("اختر المندوب", agentOptions);
+        if (!agentId) return;
+        
+        // 3. اختيار الوضع
+        let mode = await smartSelect("نوع الرحلة", [
+            { value: 'names_only', text: '📝 أسماء فقط (المندوب يقرر الكميات)', icon: 'fa-list', color: '#00d2ff' },
+            { value: 'names_with_qty', text: '📦 أسماء + كميات محددة', icon: 'fa-boxes', color: '#38ef7d' },
+            { value: 'free', text: '🎯 حرة (المندوب يختار)', icon: 'fa-bolt', color: '#f5af19' }
+        ]);
+        if (!mode) return;
+        
+        // 4. التاريخ
+        let tripDate = await smartDialog({
+            type: 'prompt', title: 'تاريخ الرحلة',
+            message: 'أدخل التاريخ (YYYY-MM-DD) أو اتركه فارغاً = اليوم:',
+            icon: 'fa-calendar', color: '#00d2ff',
+            inputType: 'date'
+        });
+        if (tripDate === null) return; // إلغاء
+        
+        // 5. ملاحظات
+        let notes = await smartDialog({
+            type: 'prompt', title: 'ملاحظات',
+            message: 'أي توجيهات للمندوب؟ (اختياري):',
+            icon: 'fa-sticky-note', color: '#f5af19',
+            inputType: 'text', placeholder: 'مثال: ركز على بقالات المنطقة الشرقية'
+        });
+        
+        // 6. إنشاء
+        showToast("⏳ جاري الإنشاء...", "warning");
+        let createFd = new FormData();
+        createFd.append('agent_id', agentId);
+        createFd.append('mode', mode);
+        if (tripDate) createFd.append('trip_date', tripDate);
+        if (notes) createFd.append('notes', notes);
+        createFd.append('planned_clients', '[]');
+        
+        let result = await safeFetch('/api/trips/create', createFd);
+        if (result.status === 'success') {
+            playSound('success');
+            smartDialog({
+                type: 'alert', title: 'تم بنجاح ✅',
+                message: `تم إنشاء الرحلة #${result.trip_id} وتم إرسال إشعار للمندوب.`,
+                icon: 'animated-check', color: '#38ef7d'
+            });
+            setTimeout(openTripsManager, 1500);
+        } else {
+            showToast(result.message || "خطأ", "error");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
+
+async function viewTripDetails(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    showToast("⏳ جاري جلب التفاصيل...", "warning");
+    
+    try {
+        let res = await safeGet(`/api/trips/${tripId}`);
+        let data = await res.json();
+        
+        if (data.status !== 'success') {
+            return showToast(data.message || "خطأ", "error");
+        }
+        
+        let trip = data.trip;
+        let statusInfo = getTripStatusInfo(trip.status);
+        
+        // تنسيق الكروت المستلمة
+        let cardsTakenHtml = Object.keys(trip.total_cards_taken || {}).length > 0
+            ? Object.entries(trip.total_cards_taken).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ')
+            : '<span style="color:#888;">لم يسجل بعد</span>';
+        
+        let cardsReturnedHtml = Object.keys(trip.total_cards_returned || {}).length > 0
+            ? Object.entries(trip.total_cards_returned).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ')
+            : '<span style="color:#888;">لم يسجل بعد</span>';
+        
+        let html = `
+        <div style="text-align: right; max-height: 450px; overflow-y: auto; padding: 4px; font-size: 13px; line-height: 1.7;">
+            
+            <div style="background: ${statusInfo.color}22; border: 1px solid ${statusInfo.color}; border-radius: 10px; padding: 12px; margin-bottom: 12px; text-align: center;">
+                <div style="color: ${statusInfo.color}; font-weight: 900; font-size: 16px;">
+                    ${statusInfo.icon} ${statusInfo.label}
+                </div>
+                <div style="color: #aaa; font-size: 11px; margin-top: 4px;">
+                    🛵 الرحلة #${trip.id} • ${trip.trip_date || trip.created_at}
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <div style="color: #00d2ff; font-weight: bold; margin-bottom: 6px;">👤 المندوب:</div>
+                <div style="color: #fff;">${trip.agent_name || 'غير معروف'}</div>
+            </div>
+            
+            ${trip.notes ? `
+            <div style="margin-bottom: 12px;">
+                <div style="color: #00d2ff; font-weight: bold; margin-bottom: 6px;">📝 الملاحظات:</div>
+                <div style="color: #ccc; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">${escapeHTML(trip.notes)}</div>
+            </div>` : ''}
+            
+            <div style="margin-bottom: 12px;">
+                <div style="color: #38ef7d; font-weight: bold; margin-bottom: 6px;">📦 استلم من البيت:</div>
+                <div style="color: #fff; background: rgba(56, 239, 125, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 239, 125, 0.3);">
+                    ${cardsTakenHtml}
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <div style="color: #f5af19; font-weight: bold; margin-bottom: 6px;">📦 رجع للبيت:</div>
+                <div style="color: #fff; background: rgba(245, 175, 25, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(245, 175, 25, 0.3);">
+                    ${cardsReturnedHtml}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                <div style="background: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.3); text-align: center;">
+                    <div style="color: #00d2ff; font-size: 10px;">💰 محصّل</div>
+                    <div style="color: #fff; font-weight: bold; font-size: 14px;">${fmtNum(trip.total_cash_collected)} ر.ي</div>
+                </div>
+                <div style="background: rgba(56, 239, 125, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(56, 239, 125, 0.3); text-align: center;">
+                    <div style="color: #38ef7d; font-size: 10px;">💵 سلّم</div>
+                    <div style="color: #fff; font-weight: bold; font-size: 14px;">${fmtNum(trip.total_cash_delivered)} ر.ي</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <div style="color: #00d2ff; font-weight: bold; margin-bottom: 6px;">🔢 العمليات (${trip.transactions.length}):</div>
+                <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px;">
+                    ${trip.transactions.length === 0 ? '<div style="color: #888; text-align: center; padding: 10px;">لا توجد عمليات مسجلة</div>' : 
+                      trip.transactions.map(t => `<div style="color:#ccc; font-size:11px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                          <strong style="color:#00d2ff;">${escapeHTML(t.type)}</strong> • ${t.amount} ر.ي
+                      </div>`).join('')}
+                </div>
+            </div>
+            
+            <button class="btn btn-dark" style="width: 100%; margin-top: 10px;" onclick="openTripsManager()">
+                <i class="fas fa-arrow-right"></i> رجوع للرحلات
+            </button>
+        </div>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: `🛵 تفاصيل الرحلة #${tripId}`,
+            message: html,
+            icon: 'fa-route',
+            color: statusInfo.color
+        });
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
 
     // 1. فتح نافذة إدارة المناديب
     async function openSubAgentManagement() {
@@ -7668,6 +7978,9 @@ function renderSubAgentsListDialog() {
     html += `</div>`;
     html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px; font-weight:bold; font-size:14px;" onclick="openSubAgentForm(null)">
                 <i class="fas fa-user-plus"></i> إضافة مندوب جديد (تحديد الصلاحيات)
+             </button>`;
+    html += `<button class="btn" style="width: 100%; margin-top: 8px; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: #000; font-weight:bold; font-size:14px;" onclick="openTripsManager()">
+                <i class="fas fa-route"></i> 🛵 إدارة الرحلات
              </button>`;
     
     smartDialog({
@@ -8768,7 +9081,7 @@ function renderSubAgentsListDialog() {
         "مرحباً بك في الإصدار الجديد والذكي من تطبيق الشهاب pro! 🚀",
         "تمت إضافة ميزات الـ VIP، القوائم الذكية، والبصمة لراحتك. 💎",
         "يمكنك الآن العمل بدون إنترنت (أوفلاين) وسيتم المزامنة تلقائياً! 📶",
-        "هز الهاتف مرتين للتراجع عن أي عملية خاطئة! 📱👋"
+        "هز الهاتف مرتين للتراجع عن أي عملية خاطئة! ??👋"
     ];
 
     function startOnboarding() {
@@ -9618,7 +9931,7 @@ async function switchScreen(screenId) {
                 let physBtnColor = physStatus === 'on' ? '#ff4757' : '#f5af19';
                 let physBtnText = physStatus === 'on' ? '⛔ إيقاف الكروت الورقية' : '✅ تفعيل الكروت الورقية';
                 
-                // 🌟 زر الجدولة الذكية
+                // ?? زر الجدولة الذكية
                 let schedulePct = userData.debt_schedule_pct || 0;
                 let scheduleText = schedulePct > 0 ? `📉 جدولة الديون مفعلة (${schedulePct}%)` : `📈 تفعيل جدولة الديون`;
                 let scheduleColor = schedulePct > 0 ? '#f5af19' : '#38ef7d';
@@ -10132,6 +10445,372 @@ async function syncTelecomPackages() {
     function initialDataMenu() { showToast("إدخال الأرصدة الافتتاحية يتم من البوت في تليجرام.", "warning"); }
     function toggleMaintenance() { showToast("تفعيل وضع الصيانة يتم من البوت في تليجرام.", "warning"); }
 
+// =====================================================================
+// 🛵 واجهة المندوب للرحلات الميدانية (Sub-Agent Trips UI)
+// =====================================================================
+
+async function openSubAgentTrips() {
+    playSound('click');
+    showToast("⏳ جاري جلب رحلاتك...", "warning");
+    
+    try {
+        let res = await safeGet('/api/trips/my');
+        let data = await res.json();
+        
+        if (data.status !== 'success') {
+            return showToast("خطأ في جلب الرحلات", "error");
+        }
+        
+        let html = `<div style="max-height: 480px; overflow-y: auto; text-align: right; padding: 4px;">`;
+        
+        let pendingTrips = data.trips.filter(t => t.status === 'pending');
+        let activeTrips = data.trips.filter(t => t.status === 'in_progress');
+        let completedTrips = data.trips.filter(t => t.status === 'completed').slice(0, 3);
+        
+        if (pendingTrips.length > 0) {
+            html += `<h4 style="color: #f5af19; margin-bottom: 10px; border-bottom: 1px solid rgba(245,175,25,0.3); padding-bottom: 6px;"><i class="fas fa-bell"></i> رحلات جديدة (${pendingTrips.length})</h4>`;
+            pendingTrips.forEach(trip => { html += renderSubAgentTripCard(trip); });
+        }
+        
+        if (activeTrips.length > 0) {
+            html += `<h4 style="color: #00d2ff; margin: 15px 0 10px; border-bottom: 1px solid rgba(0,210,255,0.3); padding-bottom: 6px;"><i class="fas fa-route"></i> رحلات جارية (${activeTrips.length})</h4>`;
+            activeTrips.forEach(trip => { html += renderSubAgentTripCard(trip); });
+        }
+        
+        if (pendingTrips.length === 0 && activeTrips.length === 0) {
+            html += `<div style="text-align: center; color: #aaa; padding: 30px 10px;">
+                <i class="fas fa-route" style="font-size: 40px; color: #555; margin-bottom: 10px; display: block;"></i>
+                لا توجد رحلات نشطة حالياً.<br>
+                <small>سيصلك إشعار عند إرسال الوكيل رحلة جديدة.</small>
+            </div>`;
+        }
+        
+        if (completedTrips.length > 0) {
+            html += `<h4 style="color: #38ef7d; margin: 15px 0 10px; border-bottom: 1px solid rgba(56,239,125,0.3); padding-bottom: 6px;"><i class="fas fa-check-circle"></i> آخر الرحلات المكتملة</h4>`;
+            completedTrips.forEach(trip => { html += renderSubAgentTripCard(trip); });
+        }
+        
+        html += `</div>`;
+        html += `<button class="btn btn-dark" style="width: 100%; margin-top: 10px;" onclick="switchScreen('agent-operations-screen')"><i class="fas fa-arrow-right"></i> رجوع للعمليات</button>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: '🛵 رحلاتي الميدانية',
+            message: html,
+            icon: 'fa-route',
+            color: '#00d2ff'
+        });
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
+
+function renderSubAgentTripCard(trip) {
+    let statusInfo = getTripStatusInfo(trip.status);
+    let tripDate = trip.trip_date || trip.created_at || 'غير محدد';
+    
+    return `
+    <div onclick="viewSubAgentTrip(${trip.id})" style="background: rgba(15, 23, 42, 0.9); border: 1px solid ${statusInfo.color}; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative;">
+        <div style="position: absolute; top: 8px; left: 8px; background: ${statusInfo.color}22; color: ${statusInfo.color}; padding: 3px 8px; border-radius: 8px; font-size: 10px; font-weight: bold; border: 1px solid ${statusInfo.color};">
+            ${statusInfo.icon} ${statusInfo.label}
+        </div>
+        <div style="font-weight: 900; color: #00d2ff; font-size: 15px; margin-bottom: 4px;">
+            🛵 الرحلة #${trip.id}
+        </div>
+        <div style="color: #ccc; font-size: 12px; margin-bottom: 8px;">
+            📅 ${tripDate}
+        </div>
+        ${trip.notes ? `<div style="color: #f5af19; font-size: 11px; margin-bottom: 8px;">📝 ${escapeHTML(trip.notes).substring(0, 60)}</div>` : ''}
+        <div style="display: flex; gap: 10px; font-size: 11px; color: #fff; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+            <span>💰 ${fmtNum(trip.total_cash_collected)} ر.ي</span>
+            <span>🔢 ${trip.transactions_count} عملية</span>
+        </div>
+    </div>`;
+}
+
+async function viewSubAgentTrip(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    showToast("⏳ جاري جلب التفاصيل...", "warning");
+    
+    try {
+        let res = await safeGet(`/api/trips/${tripId}`);
+        let data = await res.json();
+        
+        if (data.status !== 'success') {
+            return showToast(data.message || "خطأ", "error");
+        }
+        
+        let trip = data.trip;
+        let statusInfo = getTripStatusInfo(trip.status);
+        
+        let cardsTakenHtml = Object.keys(trip.total_cards_taken || {}).length > 0
+            ? Object.entries(trip.total_cards_taken).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ')
+            : '<span style="color:#888;">لم تسجل بعد</span>';
+        
+        let cardsReturnedHtml = Object.keys(trip.total_cards_returned || {}).length > 0
+            ? Object.entries(trip.total_cards_returned).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ')
+            : '<span style="color:#888;">لم تسجل بعد</span>';
+        
+        let html = `
+        <div style="text-align: right; max-height: 480px; overflow-y: auto; padding: 4px; font-size: 13px; line-height: 1.7;">
+            <div style="background: ${statusInfo.color}22; border: 1px solid ${statusInfo.color}; border-radius: 10px; padding: 12px; margin-bottom: 12px; text-align: center;">
+                <div style="color: ${statusInfo.color}; font-weight: 900; font-size: 16px;">${statusInfo.icon} ${statusInfo.label}</div>
+                <div style="color: #aaa; font-size: 11px; margin-top: 4px;">🛵 الرحلة #${trip.id} • ${trip.trip_date || trip.created_at}</div>
+            </div>
+            
+            ${trip.notes ? `<div style="margin-bottom: 12px;">
+                <div style="color: #00d2ff; font-weight: bold; margin-bottom: 6px;">📝 توجيهات الوكيل:</div>
+                <div style="color: #ccc; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">${escapeHTML(trip.notes)}</div>
+            </div>` : ''}
+        `;
+        
+        if (trip.status === 'pending') {
+            html += `<button class="btn btn-retail" style="width: 100%; margin-bottom: 15px; padding: 12px; font-size: 14px; font-weight: bold;" onclick="subAgentAcceptTrip(${trip.id})">
+                <i class="fas fa-check-circle"></i> قبول الرحلة والبدء
+            </button>`;
+        }
+        
+        if (trip.status === 'in_progress' || trip.status === 'pending') {
+            html += `
+            <div style="margin-bottom: 12px;">
+                <div style="color: #38ef7d; font-weight: bold; margin-bottom: 6px;">📦 استلمت من البيت:</div>
+                <div style="color: #fff; background: rgba(56, 239, 125, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 239, 125, 0.3); margin-bottom: 6px;">${cardsTakenHtml}</div>
+                ${trip.status === 'in_progress' ? `<button class="btn-small" style="width: 100%; background: #38ef7d; color: #000; padding: 8px; font-weight: bold;" onclick="subAgentEnterCardsTaken(${trip.id})"><i class="fas fa-edit"></i> تسجيل الكروت المستلمة من البيت</button>` : ''}
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <div style="color: #f5af19; font-weight: bold; margin-bottom: 6px;">📦 رجعت للبيت:</div>
+                <div style="color: #fff; background: rgba(245, 175, 25, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(245, 175, 25, 0.3); margin-bottom: 6px;">${cardsReturnedHtml}</div>
+                ${trip.status === 'in_progress' ? `<button class="btn-small" style="width: 100%; background: #f5af19; color: #000; padding: 8px; font-weight: bold;" onclick="subAgentEnterCardsReturned(${trip.id})"><i class="fas fa-edit"></i> تسجيل الكروت المرتجعة للبيت</button>` : ''}
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                <div style="background: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.3); text-align: center;">
+                    <div style="color: #00d2ff; font-size: 10px;">💰 كاش محصّل</div>
+                    <div style="color: #fff; font-weight: bold; font-size: 14px;">${fmtNum(trip.total_cash_collected)} ر.ي</div>
+                </div>
+                <div style="background: rgba(56, 239, 125, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(56, 239, 125, 0.3); text-align: center;">
+                    <div style="color: #38ef7d; font-size: 10px;">💵 كاش سلّمت</div>
+                    <div style="color: #fff; font-weight: bold; font-size: 14px;">${fmtNum(trip.total_cash_delivered)} ر.ي</div>
+                </div>
+            </div>
+            
+            ${trip.status === 'in_progress' ? `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <button class="btn-small" style="background: #00d2ff; color: #000; padding: 10px; font-weight: bold;" onclick="subAgentEnterCashCollected(${trip.id})">💰 تسجيل الكاش المحصّل</button>
+                <button class="btn-small" style="background: #38ef7d; color: #000; padding: 10px; font-weight: bold;" onclick="subAgentEnterCashDelivered(${trip.id})">💵 تسجيل الكاش المسلّم</button>
+            </div>` : ''}`;
+        }
+        
+        if (trip.bypasses && trip.bypasses.length > 0) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="color: #ff4757; font-weight: bold; margin-bottom: 6px;">⚠️ تجاوزات العجز (${trip.bypasses.length}):</div>
+                <div style="background: rgba(255, 71, 87, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 71, 87, 0.3);">
+                    ${trip.bypasses.map(b => `<div style="color:#fff; font-size:11px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">▪️ ${escapeHTML(b.client_name)}: ${fmtNum(b.amount)} ر.ي</div>`).join('')}
+                </div>
+                <div style="color: #f5af19; font-size: 10px; margin-top: 4px;">💡 هذه المبالغ سُجّلت بتجاوز العجز (##) — راجعها مع شخص البيت.</div>
+            </div>`;
+        }
+        
+        if (trip.transactions.length > 0) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="color: #00d2ff; font-weight: bold; margin-bottom: 6px;">🔢 العمليات (${trip.transactions.length}):</div>
+                <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px;">
+                    ${trip.transactions.map(t => `<div style="color:#ccc; font-size:11px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><strong style="color:#00d2ff;">${escapeHTML(t.type)}</strong> • ${t.amount} ر.ي</div>`).join('')}
+                </div>
+            </div>`;
+        }
+        
+        if (trip.status === 'in_progress') {
+            html += `<button class="btn btn-danger" style="width: 100%; margin-bottom: 10px; padding: 12px; font-weight: bold; font-size: 14px;" onclick="subAgentCompleteTrip(${trip.id})"><i class="fas fa-flag-checkered"></i> إنهاء الرحلة</button>`;
+        }
+        
+        html += `<button class="btn btn-dark" style="width: 100%; margin-top: 8px;" onclick="openSubAgentTrips()"><i class="fas fa-arrow-right"></i> رجوع لرحلاتي</button></div>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: `🛵 الرحلة #${tripId}`,
+            message: html,
+            icon: 'fa-route',
+            color: statusInfo.color
+        });
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
+
+async function subAgentAcceptTrip(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let confirm = await smartDialog({
+        type: 'confirm',
+        title: 'قبول الرحلة',
+        message: 'هل أنت مستعد لبدء هذه الرحلة؟ سيتم إشعار الوكيل بذلك.',
+        icon: 'fa-check-circle',
+        color: '#38ef7d'
+    });
+    if (!confirm) return;
+    
+    showToast("⏳ جاري قبول الرحلة...", "warning");
+    let fd = new FormData(); fd.append('trip_id', tripId);
+    let res = await safeFetch('/api/trips/accept', fd);
+    if (res.status === 'success') {
+        sessionStorage.setItem('current_trip_id', String(tripId));
+        playSound('success');
+        smartDialog({ type: 'alert', title: '✅ تم القبول', message: 'تم قبول الرحلة. ابدأ بتسجيل الكروت المستلمة من البيت.', icon: 'animated-check', color: '#38ef7d' });
+        setTimeout(() => viewSubAgentTrip(tripId), 1500);
+    } else { showToast(res.message, 'error'); }
+}
+
+async function subAgentEnterCardsTaken(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let cards = {};
+    let isAdding = true;
+    
+    try {
+        let invRes = await safeGet('/api/network_data');
+        let invData = await invRes.json();
+        let physicalCards = invData.inventory.filter(i => !(i.card_type.includes('إلكتروني') || i.card_type.includes('الكتروني')));
+        
+        if (physicalCards.length === 0) return showToast("لا توجد فئات كروت ورقية مسجلة", "error");
+        
+        let cardsList = physicalCards.map(i => {
+            let match = i.card_type.match(/\d+/);
+            let imgName = match ? match[0] : 'logo';
+            return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
+        });
+        
+        while (isAdding) {
+            let card = await smartSelect("اختر الفئة المستلمة من البيت", cardsList);
+            if (!card) break;
+            let qty = await smartDialog({ type: 'prompt', title: 'الكمية المستلمة', message: `كم عدد كروت (${card}) التي أخذتها من البيت؟`, icon: 'fa-box', color: '#38ef7d', inputType: 'number' });
+            if (!qty || qty <= 0) break;
+            cards[card] = (cards[card] || 0) + parseInt(qty);
+            let summary = Object.entries(cards).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ');
+            let addMore = await smartDialog({ type: 'confirm', title: 'ما استلمته', message: `${summary}\n\nهل تستلم فئة أخرى من البيت؟`, icon: 'fa-plus', color: '#00d2ff' });
+            if (!addMore) isAdding = false;
+        }
+        
+        if (Object.keys(cards).length === 0) return showToast("تم الإلغاء", "warning");
+        
+        showToast("⏳ جاري الحفظ...", "warning");
+        let fd = new FormData();
+        fd.append('trip_id', tripId); fd.append('field', 'cards_taken'); fd.append('payload', JSON.stringify(cards));
+        let res = await safeFetch('/api/trips/update', fd);
+        if (res.status === 'success') {
+            playSound('success'); showToast("✅ تم حفظ الكروت المستلمة", "success");
+            setTimeout(() => viewSubAgentTrip(tripId), 1000);
+        } else { showToast(res.message, 'error'); }
+    } catch (e) { console.error(e); showToast("خطأ في الاتصال", "error"); }
+}
+
+async function subAgentEnterCardsReturned(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let cards = {};
+    let isAdding = true;
+    
+    try {
+        let invRes = await safeGet('/api/network_data');
+        let invData = await invRes.json();
+        let physicalCards = invData.inventory.filter(i => !(i.card_type.includes('إلكتروني') || i.card_type.includes('الكتروني')));
+        
+        if (physicalCards.length === 0) return showToast("لا توجد فئات كروت ورقية", "error");
+        
+        let cardsList = physicalCards.map(i => {
+            let match = i.card_type.match(/\d+/);
+            let imgName = match ? match[0] : 'logo';
+            return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
+        });
+        
+        while (isAdding) {
+            let card = await smartSelect("اختر الفئة المرتجعة للبيت", cardsList);
+            if (!card) break;
+            let qty = await smartDialog({ type: 'prompt', title: 'الكمية المرتجعة', message: `كم عدد كروت (${card}) التي ترجعها للبيت؟`, icon: 'fa-undo', color: '#f5af19', inputType: 'number' });
+            if (!qty || qty <= 0) break;
+            cards[card] = (cards[card] || 0) + parseInt(qty);
+            let summary = Object.entries(cards).map(([k,v]) => `▪️ ${k}: ${v}`).join('  ');
+            let addMore = await smartDialog({ type: 'confirm', title: 'ما ترجعه', message: `${summary}\n\nهل ترجع فئة أخرى للبيت؟`, icon: 'fa-plus', color: '#00d2ff' });
+            if (!addMore) isAdding = false;
+        }
+        
+        if (Object.keys(cards).length === 0) return showToast("تم الإلغاء", "warning");
+        
+        showToast("⏳ جاري الحفظ...", "warning");
+        let fd = new FormData();
+        fd.append('trip_id', tripId); fd.append('field', 'cards_returned'); fd.append('payload', JSON.stringify(cards));
+        let res = await safeFetch('/api/trips/update', fd);
+        if (res.status === 'success') {
+            playSound('success'); showToast("✅ تم حفظ الكروت المرتجعة", "success");
+            setTimeout(() => viewSubAgentTrip(tripId), 1000);
+        } else { showToast(res.message, 'error'); }
+    } catch (e) { console.error(e); showToast("خطأ في الاتصال", "error"); }
+}
+
+async function subAgentEnterCashCollected(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let amount = await smartDialog({
+        type: 'prompt', title: 'الكاش المحصّل',
+        message: 'أدخل إجمالي المبلغ الكاش الذي حصّلته من البقالات في هذه الرحلة:',
+        icon: 'fa-money-bill-wave', color: '#00d2ff', inputType: 'number'
+    });
+    if (!amount || parseFloat(amount) < 0) return;
+    
+    showToast("⏳ جاري الحفظ...", "warning");
+    let fd = new FormData();
+    fd.append('trip_id', tripId); fd.append('field', 'cash_collected'); fd.append('payload', JSON.stringify({ amount: parseFloat(amount) }));
+    let res = await safeFetch('/api/trips/update', fd);
+    if (res.status === 'success') {
+        playSound('success'); showToast("✅ تم حفظ الكاش المحصّل", "success");
+        setTimeout(() => viewSubAgentTrip(tripId), 1000);
+    } else { showToast(res.message, 'error'); }
+}
+
+async function subAgentEnterCashDelivered(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let amount = await smartDialog({
+        type: 'prompt', title: 'الكاش المسلّم',
+        message: 'أدخل المبلغ الكاش الذي سلّمته لشخص البيت (ولد الوكيل):',
+        icon: 'fa-hand-holding-usd', color: '#38ef7d', inputType: 'number'
+    });
+    if (!amount || parseFloat(amount) < 0) return;
+    
+    showToast("⏳ جاري الحفظ...", "warning");
+    let fd = new FormData();
+    fd.append('trip_id', tripId); fd.append('field', 'cash_delivered'); fd.append('payload', JSON.stringify({ amount: parseFloat(amount) }));
+    let res = await safeFetch('/api/trips/update', fd);
+    if (res.status === 'success') {
+        playSound('success'); showToast("✅ تم حفظ الكاش المسلّم", "success");
+        setTimeout(() => viewSubAgentTrip(tripId), 1000);
+    } else { showToast(res.message, 'error'); }
+}
+
+async function subAgentCompleteTrip(tripId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    let confirm = await smartDialog({
+        type: 'confirm', title: 'إنهاء الرحلة',
+        message: 'هل أنت متأكد من إنهاء الرحلة؟\nسيتم إرسال تقرير نهائي للوكيل.\n<small style="color:#f5af19;">(تأكد من تسجيل كل الكروت والكاش قبل الإنهاء)</small>',
+        icon: 'fa-flag-checkered', color: '#ff4757'
+    });
+    if (!confirm) return;
+    
+    showToast("⏳ جاري إنهاء الرحلة...", "warning");
+    let fd = new FormData(); fd.append('trip_id', tripId);
+    let res = await safeFetch('/api/trips/complete', fd);
+    if (res.status === 'success') {
+        sessionStorage.removeItem('current_trip_id');
+        playSound('success');
+        smartDialog({ type: 'alert', title: '🏁 تم الإنهاء', message: 'تم إنهاء الرحلة بنجاح وإرسال التقرير للوكيل.', icon: 'animated-check', color: '#38ef7d' });
+        setTimeout(() => openSubAgentTrips(), 1500);
+    } else { showToast(res.message, 'error'); }
+}
+
        // تصحيح دالة فتح شاشة الوكيل لفتح القائمة الرئيسية مع الشريط السفلي
     function showAgentScreen() {
         document.querySelectorAll('.screen-section').forEach(el => el.style.display = 'none');
@@ -10156,6 +10835,13 @@ async function syncTelecomPackages() {
 
         // 🌟 [الجديد] تطبيق صلاحيات المندوب (الوكيل الفرعي) 🌟
         let userRole = localStorage.getItem('user_role');
+        
+        // 🛰️ إظهار لوحة المراقبة للوكيل فقط
+        let liveMonitorBtn = document.getElementById('live-monitor-btn');
+        if (liveMonitorBtn) {
+            liveMonitorBtn.style.display = (userRole !== 'sub_agent') ? 'flex' : 'none';
+        }
+        
         if (userRole === 'sub_agent') {
             applySubAgentPermissions();
         }
@@ -10268,6 +10954,36 @@ async function syncTelecomPackages() {
         setVisible('button[onclick*="collectDebt"]', perms.collect_debt !== false);
         setVisible('button[onclick*="addExpense"]', perms.add_expense === true);
         setVisible('button[onclick*="viewAvailableCash"]', perms.view_cash === true);
+
+        // 7. 🛵 زر الرحلات الميدانية (يظهر للمندوب دائماً)
+        let tripsBtn = document.getElementById('sub-agent-trips-btn');
+        if (tripsBtn) tripsBtn.style.display = 'flex';
+
+        // 🛰️ إخفاء لوحة المراقبة عن المندوب (للوكيل فقط)
+        let liveMonitorBtn = document.getElementById('live-monitor-btn');
+        if (liveMonitorBtn) liveMonitorBtn.style.display = 'none';
+        
+        // 8. 🛵 الصلاحيات الجديدة للمندوب
+        // فتح رحلة بنفسه
+        let createTripBtn = document.getElementById('sub-agent-create-trip-btn');
+        if (createTripBtn) {
+            createTripBtn.style.display = perms.create_trips_self === true ? 'flex' : 'none';
+        }
+
+        // عرض كل البقالات
+        let allClientsBtn = document.getElementById('sub-agent-all-clients-btn');
+        if (allClientsBtn) {
+            allClientsBtn.style.display = perms.view_all_clients === true ? 'flex' : 'none';
+        }
+
+        // عرض تفاصيل الديون
+        if (perms.view_all_debts !== true) {
+            let debtsBtn = document.getElementById('sub-agent-all-debts-btn');
+            if (debtsBtn) debtsBtn.style.display = 'none';
+        } else {
+            let debtsBtn = document.getElementById('sub-agent-all-debts-btn');
+            if (debtsBtn) debtsBtn.style.display = 'flex';
+        }
     }
 
 // =====================================================================
@@ -10379,12 +11095,62 @@ async function giveCardsToClient() {
             });
 
             if (cashCollected !== null && parseFloat(cashCollected) > 0) {
+                let collectUUID = generateUUID();
                 let fdCollect = new FormData();
                 fdCollect.append('client_id', clientId);
                 fdCollect.append('amount', parseFloat(cashCollected));
-                await safeFetch('/api/collect', fdCollect);
-                playSound('cash');
-                showToast(`✅ تم قبض مبلغ ${cashCollected} ريال بنجاح!`, "success");
+                fdCollect.append('txn_uuid', collectUUID);
+                
+                // تمرير trip_id إن كان مندوباً
+                let userRole = localStorage.getItem('user_role');
+                if (userRole === 'sub_agent') {
+                    let currentTrip = sessionStorage.getItem('current_trip_id');
+                    if (currentTrip) fdCollect.append('trip_id', currentTrip);
+                }
+                
+                let collectRes = await safeFetch('/api/collect', fdCollect);
+                
+                if (collectRes && collectRes.status === 'success') {
+                    playSound('cash');
+                    showToast(`✅ تم قبض ${cashCollected} ريال بنجاح!`, "success");
+                } else if (collectRes && collectRes.status === 'shortage_error') {
+                    playSound('error');
+                    let bypassConfirm = await smartDialog({
+                        type: 'confirm',
+                        title: '🚨 عجز مالي',
+                        message: `المطلوب: ${collectRes.expected} ريال\nدفع: ${collectRes.paid} ريال\nالعجز: <b style="color:#ff4757;">${collectRes.shortage} ريال</b><br><br>هل تسجل التحصيل الجزئي (تجاوز)؟`,
+                        icon: 'fa-exclamation-triangle',
+                        color: '#ff4757'
+                    });
+                    
+                    if (bypassConfirm) {
+                        let pinInput = await smartDialog({
+                            type: 'prompt',
+                            title: '🔑 رمز التجاوز',
+                            message: 'أدخل رمز التجاوز المعتمد:',
+                            icon: 'fa-key',
+                            color: '#f5af19',
+                            inputType: 'password',
+                            placeholder: '##'
+                        });
+                        
+                        if (pinInput && pinInput.trim() === '##') {
+                            fdCollect.append('override_secret', '##');
+                            let retryRes = await safeFetch('/api/collect', fdCollect);
+                            if (retryRes && retryRes.status === 'success') {
+                                playSound('success');
+                                showToast(`⚠️ تم تسجيل ${cashCollected} ريال (تجاوز عجز)`, "warning");
+                            } else {
+                                showToast(retryRes && retryRes.message || 'فشل', 'error');
+                            }
+                        } else if (pinInput) {
+                            showToast('رمز خاطئ', 'error');
+                        }
+                    }
+                } else {
+                    playSound('error');
+                    showToast((collectRes && collectRes.message) || 'لم يتم التحصيل', 'error');
+                }
             }
         }
 
@@ -10425,7 +11191,7 @@ async function giveCardsToClient() {
         });
 
         if (!qty || parseInt(qty) <= 0) return showToast("تم إلغاء التسليم", "warning");
-
+        
         let paymentType = await smartSelect("طريقة الدفع للبضاعة الجديدة", [
             { value: 'credit', text: '📝 آجل (دين على البقالة)', icon: 'fa-file-invoice-dollar', color: '#ff4757' },
             { value: 'cash', text: '💵 نقداً (كاش فوري تم استلامه)', icon: 'fa-money-bill-wave', color: '#38ef7d' }
@@ -10438,10 +11204,49 @@ async function giveCardsToClient() {
         fdSell.append('client_id', clientId);
         fdSell.append('card_type', selectedCard);
         fdSell.append('quantity', parseInt(qty));
+        fdSell.append('sale_mode', paymentType === 'credit' ? 'credit' : 'wholesale');
         fdSell.append('payment_type', paymentType);
+        fdSell.append('txn_uuid', generateUUID());
+        
+        // 🛵 تمرير trip_id للمندوب
+        let userRole2 = localStorage.getItem('user_role');
+        if (userRole2 === 'sub_agent') {
+            let currentTrip2 = sessionStorage.getItem('current_trip_id');
+            if (currentTrip2) fdSell.append('trip_id', currentTrip2);
+        }
 
         let sellRes = await safeFetch('/api/sell', fdSell);
-        if (sellRes.status === 'success') {
+        
+        // 🚨 معالجة الطلب: تجاوز سقف المديونية
+        if (sellRes && sellRes.requires_override) {
+            playSound('error');
+            let bypassCardConfirm = await smartDialog({
+                type: 'confirm',
+                title: '🚨 تجاوز سقف المديونية',
+                message: sellRes.message,
+                icon: 'fa-exclamation-triangle',
+                color: '#ff4757'
+            });
+            
+            if (bypassCardConfirm) {
+                let pinCard = await smartDialog({
+                    type: 'prompt',
+                    title: '🔑 رمز التجاوز',
+                    message: 'أدخل رمز التجاوز:',
+                    icon: 'fa-key',
+                    color: '#f5af19',
+                    inputType: 'password',
+                    placeholder: userRole2 === 'sub_agent' ? '##' : '#'
+                });
+                
+                if (pinCard) {
+                    fdSell.append('override_secret', pinCard.trim());
+                    sellRes = await safeFetch('/api/sell', fdSell);
+                }
+            }
+        }
+        
+        if (sellRes && sellRes.status === 'success') {
             playSound('success');
             smartDialog({
                 type: 'alert',
@@ -10451,7 +11256,7 @@ async function giveCardsToClient() {
                 color: '#38ef7d'
             });
             smartReload(2500);
-        } else {
+        } else if (sellRes && sellRes.status !== 'success') {
             smartDialog({
                 type: 'alert',
                 title: 'تعذر التسليم',
@@ -10465,7 +11270,8 @@ async function giveCardsToClient() {
         console.error("Field delivery error:", e);
         showToast("حدث خطأ أثناء العملية", "error");
     }
-}
+    } // 👈 أضف هذا القوس هنا لإغلاق دالة giveCardsToClient
+
     // ================= دالة تحصيل ديون الرصيد (مع الحارس الأمني) =================
     async function collectTelecomDebt() {
         showToast("⏳ جاري جلب قائمة البقالات...", "warning");
@@ -11899,6 +12705,13 @@ class TelecomGateway {
 
     // 1. فتح البوابة
     showDashboard(sourceDashboardId) {
+        // 🚨 حماية قاطعة: المدير لا يدخل قسم التسديدات نهائياً (حتى في وضع التخفي)
+        if ((typeof userId !== 'undefined' && userId === MANAGER_ID) || 
+            (typeof originalManagerId !== 'undefined' && originalManagerId === MANAGER_ID)) {
+            playSound('error');
+            return;
+        }
+        
         if (sourceDashboardId === 'client-lobby-screen' && typeof clientTelecomStatus !== 'undefined' && clientTelecomStatus === 'off') {
             playSound('error');
             smartDialog({
@@ -11925,7 +12738,7 @@ class TelecomGateway {
         
              // 🌟 إظهار الشريط السفلي المناسب 🌟
         // إزالة 999999 من هنا لكي يرى حساب التجربة واجهة العميل بدلاً من أرباح الوكيل
-        if (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === MANAGER_ID || userId === 888888) && !originalManagerId) {
+        if (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === 888888) && !originalManagerId) {
             // للوكيل والإدارة والمدقق
             document.getElementById('telecom-balance-title').innerText = "رصيدي لدى المزود";
             document.getElementById('telecom-debt-title').innerText = "أرباحي من التسديدات";
@@ -13017,7 +13830,7 @@ class TelecomGateway {
                         html += `
                         <div style="background: #0f172a; padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid ${statusColor}; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
                             <div style="display:flex; justify-content:space-between; color:#aaa; font-size:12px; margin-bottom:8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
-                                <span>?? ${tx.network}</span>
+                                <span><i class="fas fa-network-wired"></i> ${tx.network}</span>
                                 <span>🕒 ${tx.date}</span>
                             </div>
                             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -14586,6 +15399,271 @@ function performGlobalSearch() {
                 }
             }, 1500);
         });
-    </script>
+        
+        // =====================================================================
+// 🛵 دوال الصلاحيات الجديدة للمندوب
+// =====================================================================
+
+async function subAgentCreateTripSelf() {
+    playSound('click');
+    let mode = await smartSelect("نوع الرحلة", [
+        { value: 'free', text: '🎯 حرة (أنت تختار البقالات)', icon: 'fa-bolt', color: '#f5af19' },
+        { value: 'names_only', text: '📝 أسماء فقط', icon: 'fa-list', color: '#00d2ff' }
+    ]);
+    if (!mode) return;
+    
+    let notes = await smartDialog({
+        type: 'prompt', title: 'ملاحظات',
+        message: 'اكتب ما تنوي فعله (اختياري):',
+        icon: 'fa-sticky-note', color: '#00d2ff',
+        inputType: 'text', placeholder: 'مثال: زيارة بقالات المنطقة الشرقية'
+    });
+    
+    showToast("⏳ جاري فتح الرحلة...", "warning");
+    let fd = new FormData();
+    fd.append('mode', mode);
+    if (notes) fd.append('notes', notes);
+    
+    let res = await safeFetch('/api/trips/create-self', fd);
+    if (res.status === 'success') {
+        playSound('success');
+        smartDialog({
+            type: 'alert', title: '✅ تم',
+            message: `تم فتح الرحلة #${res.trip_id}.\nيمكنك الآن تسجيل الكروت والبدء.`,
+            icon: 'animated-check', color: '#38ef7d'
+        });
+        setTimeout(() => openSubAgentTrips(), 1500);
+    } else {
+        showToast(res.message || "خطأ", "error");
+    }
+}
+
+async function subAgentViewAllClients() {
+    playSound('click');
+    showToast("⏳ جاري جلب البقالات...", "warning");
+    try {
+        let res = await safeGet('/api/network_data');
+        let data = await res.json();
+        if (data.status !== 'success') return showToast("خطأ", "error");
+        
+        let html = `<div style="max-height: 480px; overflow-y: auto; text-align: right; padding: 4px;">`;
+        if (data.clients.length === 0) {
+            html += `<div style="text-align:center; color:#aaa; padding:20px;">لا توجد بقالات.</div>`;
+        } else {
+            data.clients.forEach(c => {
+                let regionText = c.region ? ` <small style="color:#00d2ff; font-size:10px;">(${c.region})</small>` : '';
+                html += `<div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; margin-bottom: 8px;">
+                    <div style="color: #00d2ff; font-weight: 900; font-size: 14px; margin-bottom: 4px;">🏪 ${escapeHTML(c.name)}${regionText}</div>
+                    <div style="color: #ccc; font-size: 11px;">📍 ${c.region || 'غير محدد'}</div>
+                </div>`;
+            });
+        }
+        html += `</div>`;
+        smartDialog({ type: 'alert', title: '🏪 كل البقالات', message: html, icon: 'fa-store', color: '#00d2ff' });
+    } catch (e) { showToast("خطأ في الاتصال", "error"); }
+}
+
+async function subAgentViewAllDebts() {
+    playSound('click');
+    showToast("⏳ جاري جلب الديون...", "warning");
+    try {
+        let res = await safeGet('/api/network_data');
+        let data = await res.json();
+        if (data.status !== 'success') return showToast("خطأ", "error");
+        
+        let sorted = data.clients.filter(c => c.debt > 0).sort((a,b) => b.debt - a.debt);
+        let html = `<div style="max-height: 480px; overflow-y: auto; text-align: right; padding: 4px;">`;
+        if (sorted.length === 0) {
+            html += `<div style="text-align:center; color:#aaa; padding:20px;">✅ لا توجد ديون مسجلة.</div>`;
+        } else {
+            sorted.forEach(c => {
+                let indicator = c.debt < 20000 ? '🟢' : (c.debt < 50000 ? '🟡' : '🔴');
+                html += `<div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,71,87,0.3); border-radius: 10px; padding: 12px; margin-bottom: 8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="color: #fff; font-weight: 900; font-size: 13px;">${indicator} ${escapeHTML(c.name)}</div>
+                        <div style="color: #ff4757; font-weight: bold; font-size: 14px;">${fmtNum(c.debt)} ر.ي</div>
+                    </div>
+                </div>`;
+            });
+        }
+        html += `</div>`;
+        smartDialog({ type: 'alert', title: '💰 ديون البقالات', message: html, icon: 'fa-money-bill-wave', color: '#ff4757' });
+    } catch (e) { showToast("خطأ في الاتصال", "error"); }
+}
+
+// =====================================================================
+// 🛰️ لوحة المراقبة اللحظية للمندوبين
+// =====================================================================
+
+async function openLiveMonitor() {
+    playSound('click');
+    showToast("⏳ جاري تحديث البيانات...", "warning");
+    
+    try {
+        let res = await safeGet('/api/trips/live-monitor');
+        let data = await res.json();
+        
+        if (data.status !== 'success') {
+            return showToast(data.message || "خطأ", "error");
+        }
+        
+        let html = `<div style="max-height: 480px; overflow-y: auto; text-align: right; padding: 4px;">`;
+        
+        if (data.agents.length === 0) {
+            html += `<div style="text-align: center; color: #aaa; padding: 30px 10px;">
+                <i class="fas fa-satellite-dish" style="font-size: 40px; color: #555; margin-bottom: 10px; display: block;"></i>
+                لا يوجد مناديب مسجلون حالياً.
+            </div>`;
+        } else {
+            data.agents.forEach(agent => {
+                let onlineDot = agent.online 
+                    ? '<span style="display:inline-block; width:10px; height:10px; background:#38ef7d; border-radius:50%; box-shadow:0 0 10px #38ef7d; margin-left:5px;"></span>' 
+                    : '<span style="display:inline-block; width:10px; height:10px; background:#555; border-radius:50%; margin-left:5px;"></span>';
+                
+                let tripInfo = '';
+                if (agent.active_trip) {
+                    let statusLabel = agent.active_trip.status === 'pending' ? '⏳ بانتظار القبول' : '🛵 جارية';
+                    let statusColor = agent.active_trip.status === 'pending' ? '#f5af19' : '#00d2ff';
+                    tripInfo = `
+                    <div style="background: ${statusColor}22; border: 1px solid ${statusColor}; border-radius: 8px; padding: 8px; margin: 8px 0;">
+                        <div style="color: ${statusColor}; font-weight: bold; font-size: 12px;">
+                            ${statusLabel} — رحلة #${agent.active_trip.id}
+                        </div>
+                        <div style="color: #aaa; font-size: 10px; margin-top: 3px;">
+                            ⏰ بدأت: ${agent.active_trip.started_at || 'غير محدد'}
+                        </div>
+                    </div>`;
+                } else {
+                    tripInfo = `<div style="color: #666; font-size: 11px; text-align: center; padding: 5px;">لا توجد رحلة نشطة</div>`;
+                }
+                
+                // عرض الكروت في يده
+                let cardsHtml = '';
+                if (Object.keys(agent.cards_in_hand).length > 0) {
+                    cardsHtml = Object.entries(agent.cards_in_hand).map(([k,v]) => 
+                        `<span style="background: rgba(56,239,125,0.2); color: #38ef7d; padding: 3px 8px; border-radius: 6px; font-size: 10px; margin-left: 4px; display: inline-block; margin-bottom: 3px;">${escapeHTML(k)}: ${v}</span>`
+                    ).join('');
+                } else {
+                    cardsHtml = '<span style="color:#666; font-size:10px;">لا كروت معه</span>';
+                }
+                
+                // الكاش
+                let cashGap = agent.cash_collected - agent.cash_delivered;
+                let cashColor = cashGap > 5000 ? '#ff4757' : (cashGap > 0 ? '#f5af19' : '#38ef7d');
+                
+                html += `
+                <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #f5af19; border-radius: 12px; padding: 12px; margin-bottom: 12px;">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div>
+                            ${onlineDot}
+                            <strong style="color: #00d2ff; font-size: 14px;">🛵 ${escapeHTML(agent.agent_name)}</strong>
+                        </div>
+                        <div style="font-size: 10px; color: #38ef7d; font-weight: bold;">🔢 ${agent.today_ops} عملية اليوم</div>
+                    </div>
+                    
+                    ${tripInfo}
+                    
+                    <div style="margin-bottom: 6px;">
+                        <div style="color: #38ef7d; font-size: 11px; margin-bottom: 4px;">📦 الكروت في يده:</div>
+                        <div>${cardsHtml}</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <div style="background: rgba(0,210,255,0.1); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="color: #00d2ff; font-size: 9px;">💰 محصّل</div>
+                            <div style="color: #fff; font-weight: bold; font-size: 13px;">${fmtNum(agent.cash_collected)} ر.ي</div>
+                        </div>
+                        <div style="background: rgba(56,239,125,0.1); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="color: #38ef7d; font-size: 9px;">💵 سلّم</div>
+                            <div style="color: #fff; font-weight: bold; font-size: 13px;">${fmtNum(agent.cash_delivered)} ر.ي</div>
+                        </div>
+                    </div>
+                    
+                    ${cashGap > 0 ? `
+                    <div style="background: rgba(255,71,87,0.15); border: 1px solid ${cashColor}; border-radius: 6px; padding: 6px; margin-bottom: 8px; text-align: center;">
+                        <span style="color: ${cashColor}; font-size: 11px; font-weight: bold;">⚠️ فارق كاش لم يُورَّد: ${fmtNum(cashGap)} ر.ي</span>
+                    </div>` : ''}
+                    
+                    <div style="font-size: 10px; color: #666; margin-bottom: 8px;">
+                        📍 آخر بقالة: ${escapeHTML(agent.last_client || 'غير محدد')} • ⏰ ${agent.last_activity || 'غير محدد'}
+                    </div>
+                    
+                    <button onclick="emergencyStopAgent(${agent.agent_id}, '${escapeJS(agent.agent_name)}')" 
+                            style="width: 100%; background: linear-gradient(to right, #ed213a, #93291e); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer;">
+                        🚨 إيقاف طارئ
+                    </button>
+                </div>`;
+            });
+        }
+        
+        html += `</div>`;
+        html += `<button class="btn btn-outline" style="width: 100%; margin-top: 10px; color: #00d2ff; border-color: #00d2ff;" onclick="openLiveMonitor()">
+            <i class="fas fa-sync-alt"></i> تحديث البيانات
+        </button>`;
+        
+        smartDialog({
+            type: 'alert',
+            title: '🛰️ لوحة المراقبة اللحظية',
+            message: html,
+            icon: 'fa-satellite-dish',
+            color: '#ffa502'
+        });
+    } catch (e) {
+        console.error(e);
+        showToast("خطأ في الاتصال", "error");
+    }
+}
+
+async function emergencyStopAgent(agentId, agentName) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    playSound('click');
+    
+    let reason = await smartDialog({
+        type: 'prompt',
+        title: '🚨 إيقاف طارئ',
+        message: `أنت على وشك إيقاف <b>(${agentName})</b> نهائياً:\n\n❌ إلغاء كل الرحلات النشطة\n❌ تجميد الحساب\n❌ طرد من الجهاز\n\n<b style="color:#ff4757;">اكتب السبب (إلزامي):</b>`,
+        icon: 'fa-exclamation-triangle',
+        color: '#ff4757',
+        inputType: 'text',
+        placeholder: 'مثال: تصرف مريب / اختفى 24 ساعة...'
+    });
+    
+    if (!reason || reason.trim().length < 3) {
+        return showToast("يجب كتابة سبب الإيقاف", "warning");
+    }
+    
+    let confirm = await smartDialog({
+        type: 'confirm',
+        title: 'تأكيد نهائي',
+        message: `هل أنت متأكد؟\n\nهذا الإجراء <b style="color:#ff4757;">لا يمكن التراجع عنه</b> من التطبيق.`,
+        icon: 'fa-shield-alt',
+        color: '#ff4757'
+    });
+    
+    if (!confirm) return;
+    
+    showToast("⏳ جاري التنفيذ...", "warning");
+    
+    let fd = new FormData();
+    fd.append('agent_id', agentId);
+    fd.append('reason', reason);
+    
+    let res = await safeFetch('/api/trips/emergency-stop', fd);
+    if (res.status === 'success') {
+        playSound('error');
+        smartDialog({
+            type: 'alert',
+            title: '🚨 تم الإيقاف',
+            message: res.message,
+            icon: 'fa-shield-alt',
+            color: '#ff4757'
+        });
+    } else {
+        showToast(res.message || "خطأ", "error");
+    }
+}
+
+</script>
 </body>
 </html>
