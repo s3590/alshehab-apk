@@ -2696,70 +2696,72 @@ async function checkForUpdates() {
     let availableCards = [];
 
     // ================= نظام التوجيه الذكي للروابط والإشعارات (محمي من الـ Reload وتداخل النوافذ) =================
-    window.executePendingDeepLink = function() {
-        let savedAction = sessionStorage.getItem('pendingDeepLink');
-        if (!savedAction) return;
-        
-        // 🌟 الإصلاح: التأكد من جلب الآيدي بشكل موثوق حتى لو كانت الصفحة للتو تحملت
-        let currentUserId = (typeof userId !== 'undefined' && userId > 0) ? userId : parseInt(localStorage.getItem('saved_user_id') || 0);
-        if (currentUserId === 0) return; 
+    window.executePendingDeepLink = function() {        
+    let savedAction = sessionStorage.getItem('pendingDeepLink');
+    if (!savedAction) return;
+    
+    let currentUserId = (typeof userId !== 'undefined' && userId > 0) ? userId : parseInt(localStorage.getItem('saved_user_id') || 0);
+    if (currentUserId === 0) return; 
+    
+    // 🔒 درع أمني: تأجيل التنفيذ إذا كانت شاشة القفل مفتوحة
+    let lockScreen = document.getElementById('lock-screen');
+    if (lockScreen && (lockScreen.style.display === 'flex' || lockScreen.style.display === 'block')) {
+        console.log("⏳ شاشة القفل مفتوحة - سيتم تنفيذ الرابط العميق بعد فك القفل");
+        return; // pendingDeepLink يبقى محفوظاً في sessionStorage
+    }
 
-        let action = JSON.parse(savedAction);
-        sessionStorage.removeItem('pendingDeepLink'); 
+    let action = JSON.parse(savedAction);
+    sessionStorage.removeItem('pendingDeepLink'); 
 
-        // إغلاق أي نوافذ مفتوحة لضمان عدم التداخل
-        document.querySelectorAll('.modal').forEach(m => {
-            if (m.id !== 'lock-screen' && m.id !== 'force-update-screen') {
-                m.style.display = 'none';
+    // إغلاق أي نوافذ مفتوحة لضمان عدم التداخل
+    document.querySelectorAll('.modal').forEach(m => {
+        if (m.id !== 'lock-screen' && m.id !== 'force-update-screen') {
+            m.style.display = 'none';
+        }
+    });
+
+    setTimeout(() => {
+        if (action.route === 'chat') {
+            if (action.actionId === 'reply') {
+                if (typeof showToast === 'function') showToast("✅ تم إرسال ردك السريع بنجاح!", "success");
+            } else {
+                let targetClientId = parseInt(action.client_id);
+                if (currentUserId === ADMIN_ID && targetClientId) {
+                    if (typeof adminQuickReplyToClient === 'function') adminQuickReplyToClient(targetClientId);
+                } else if (typeof openChat === 'function') {
+                    openChat();
+                }
             }
-        });
-
-        // 🌟 الإصلاح: تأخير بسيط جداً لضمان اختفاء شاشة التحميل قبل إظهار النافذة المنبثقة
-        setTimeout(() => {
-            if (action.route === 'chat') {
-                if (action.actionId === 'reply') {
-                    if (typeof showToast === 'function') showToast("✅ تم إرسال ردك السريع بنجاح!", "success");
-                } else {
-                    // 🌟 الإصلاح الجذري: تحويل client_id إلى رقم (Integer) لكي تقبله الدالة
-                    let targetClientId = parseInt(action.client_id);
-                    if (currentUserId === ADMIN_ID && targetClientId) {
-                        if (typeof adminQuickReplyToClient === 'function') adminQuickReplyToClient(targetClientId);
-                    } else if (typeof openChat === 'function') {
-                        openChat();
-                    }
-                }
-            } else if (action.route === 'pending_orders') {
-                // 🚀 منع فتح الشاشة إذا كان المستخدم قد رفض الطلب بالفعل من الإشعار
-                if (action.actionId === 'reject') {
-                    if (typeof showToast === 'function') showToast("✅ تم رفض الطلب بنجاح!", "success");
-                } else {
-                    if (typeof viewPendingOrders === 'function') viewPendingOrders();
-                }
-            } else if (action.route === 'tickets') {
-                if (typeof viewSupportTickets === 'function') viewSupportTickets();
-            } else if (action.route === 'trips') {
-                let userRole = localStorage.getItem('user_role');
-                if (currentUserId === ADMIN_ID && typeof openTripsManager === 'function') {
-                    openTripsManager();
-                } else if (userRole === 'sub_agent' && typeof openSubAgentTrips === 'function') {
-                    openSubAgentTrips();
-                }
-            } else if (action.route === 'telecom') {
-                // 🚨 حماية: المدير ممنوع نهائياً من دخول قسم التسديدات
-                if (currentUserId === MANAGER_ID) {
-                    // تجاهل تام
-                } else if (typeof telecomApp !== 'undefined') {
-                    let sourceScreen = (currentUserId === ADMIN_ID || currentUserId === 888888) 
-                        ? 'agent-operations-screen' 
-                        : 'client-lobby-screen';
-                    telecomApp.showDashboard(sourceScreen);
-                }
-            } else if (action.route === 'pos') {
-                if (currentUserId === ADMIN_ID && typeof agentQuickSale === 'function') agentQuickSale();
-                else if (currentUserId > 0 && currentUserId !== MANAGER_ID && typeof openPhysicalApp === 'function') openPhysicalApp();
+        } else if (action.route === 'pending_orders') {
+            if (action.actionId === 'reject') {
+                if (typeof showToast === 'function') showToast("✅ تم رفض الطلب بنجاح!", "success");
+            } else {
+                if (typeof viewPendingOrders === 'function') viewPendingOrders();
             }
-        }, 300); // 👈👈👈 هذا هو السطر المفقود الذي كان يسبب الكارثة!
-    };
+        } else if (action.route === 'tickets') {
+            if (typeof viewSupportTickets === 'function') viewSupportTickets();
+        } else if (action.route === 'trips') {
+            let userRole = localStorage.getItem('user_role');
+            if (currentUserId === ADMIN_ID && typeof openTripsManager === 'function') {
+                openTripsManager();
+            } else if (userRole === 'sub_agent' && typeof openSubAgentTrips === 'function') {
+                openSubAgentTrips();
+            }
+        } else if (action.route === 'telecom') {
+            if (currentUserId === MANAGER_ID) {
+                // حماية: المدير ممنوع
+            } else if (typeof telecomApp !== 'undefined') {
+                let sourceScreen = (currentUserId === ADMIN_ID || currentUserId === 888888) 
+                    ? 'agent-operations-screen' 
+                    : 'client-lobby-screen';
+                telecomApp.showDashboard(sourceScreen);
+            }
+        } else if (action.route === 'pos') {
+            if (currentUserId === ADMIN_ID && typeof agentQuickSale === 'function') agentQuickSale();
+            else if (currentUserId > 0 && currentUserId !== MANAGER_ID && typeof openPhysicalApp === 'function') openPhysicalApp();
+        }
+    }, 300);
+};
 
     // ================= دالة توليد رقم مرجعي فريد لمنع الدفع المزدوج =================
     function generateUUID() {
@@ -3332,48 +3334,90 @@ ${errorDetails}
         });
     }
 
-    // ================= الإشعارات الذكية (الجزيرة التفاعلية) =================
-    let lastToastTime = 0; // متغير لحفظ وقت آخر إشعار
+// ================= الإشعارات الذكية (الجزيرة التفاعلية) =================
+let lastToastTime = 0;
+let lastToastMessage = '';  // ✅ لحفظ آخر رسالة (لمنع التكرار الذكي)
 
-    function showToast(message, type = 'success', route = null) {
-        // 🌟 فلتر منع التكرار الذكي: إذا وصل إشعاران في نفس اللحظة، نتجاهل الثاني
-        let now = Date.now();
-        if (now - lastToastTime < 2000) {
-            return; // تجاهل الإشعار إذا كان الفارق أقل من ثانيتين
-        }
-        lastToastTime = now;
+function showToast(message, type = 'success', route = null) {
+    // ✅ منع التكرار الذكي: يتجاهل فقط الرسالة المطابقة خلال 2 ثانية
+    // (يسمح بظهور إشعارات مختلفة في نفس اللحظة)
+    let now = Date.now();
+    if (lastToastMessage === message && (now - lastToastTime) < 2000) {
+        return; // تجاهل الإشعار المكرر فقط
+    }
+    lastToastMessage = message;
+    lastToastTime = now;
 
-        let island = document.getElementById('dynamic-island');
-        let content = document.getElementById('di-text');
-        let icon = document.getElementById('di-icon');
-        
-        island.className = ''; // Reset
-        content.innerHTML = message;
-        
-        if(type === 'success') { icon.className = 'fas fa-check-circle'; icon.style.color = '#38ef7d'; island.classList.add('success'); }
-        else if(type === 'error') { icon.className = 'fas fa-times-circle'; icon.style.color = '#ff4757'; island.classList.add('error'); }
-        else { icon.className = 'fas fa-info-circle'; icon.style.color = '#f5af19'; }
-        
-        // 🌟 السحر هنا: جعل الإشعار الداخلي قابلاً للضغط ويفتح الشاشات!
+    let island = document.getElementById('dynamic-island');
+    let content = document.getElementById('di-text');
+    let icon = document.getElementById('di-icon');
+    
+    if (!island || !content || !icon) return; // حماية
+    
+    island.className = ''; // Reset
+    content.innerHTML = message;
+    
+    if(type === 'success') { icon.className = 'fas fa-check-circle'; icon.style.color = '#38ef7d'; island.classList.add('success'); }
+    else if(type === 'error') { icon.className = 'fas fa-times-circle'; icon.style.color = '#ff4757'; island.classList.add('error'); }
+    else { icon.className = 'fas fa-info-circle'; icon.style.color = '#f5af19'; }
+    
+    // ✅ السحر هنا: نمسح onclick القديم دائماً لمنع فتح صفحة خاطئة
+    island.onclick = null;
+    
+    // ✅ نضيف onclick جديد فقط إذا كان هناك route
+    if (route) {
         island.onclick = function() {
             island.classList.remove('active');
-            if (route === 'chat') {
-                if (typeof openChat === 'function') openChat();
-            } else if (route === 'pending_orders') {
-                if (typeof viewPendingOrders === 'function') viewPendingOrders();
-            } else if (route === 'tickets') {
-                if (typeof viewSupportTickets === 'function') viewSupportTickets();
+            try {
+                if (route === 'chat') {
+                    if (typeof openChat === 'function') openChat();
+                } else if (route === 'pending_orders') {
+                    if (typeof viewPendingOrders === 'function') viewPendingOrders();
+                } else if (route === 'tickets') {
+                    if (typeof viewSupportTickets === 'function') viewSupportTickets();
+                } else if (route === 'trips') {
+                    let userRole = localStorage.getItem('user_role');
+                    if (typeof userId !== 'undefined' && userId === ADMIN_ID && typeof openTripsManager === 'function') {
+                        openTripsManager();
+                    } else if (userRole === 'sub_agent' && typeof openSubAgentTrips === 'function') {
+                        openSubAgentTrips();
+                    }
+                } else if (route === 'pos') {
+                    if (typeof userId !== 'undefined' && userId === ADMIN_ID && typeof agentQuickSale === 'function') {
+                        agentQuickSale();
+                    } else if (typeof openPhysicalApp === 'function') {
+                        openPhysicalApp();
+                    }
+                } else if (route === 'telecom') {
+                    if (typeof telecomApp !== 'undefined' && typeof telecomApp.showDashboard === 'function') {
+                        let src = (typeof userId !== 'undefined' && userId === ADMIN_ID) 
+                            ? 'agent-operations-screen' 
+                            : 'client-lobby-screen';
+                        telecomApp.showDashboard(src);
+                    }
+                } else if (route === 'lock' || route === 'suspend') {
+                    // ✅ جديد: فتح المحادثة عند إيقاف/تجميد الحساب (للتواصل مع الإدارة)
+                    if (typeof openChat === 'function') openChat();
+                }
+            } catch (err) {
+                console.error('Toast click error:', err);
             }
         };
-        
-        island.classList.add('active');
-        playSound('toast');
-        if(tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(type);
-
-        setTimeout(() => {
-            island.classList.remove('active');
-        }, 3500);
     }
+    
+    island.classList.add('active');
+    
+    try {
+        if (typeof playSound === 'function') playSound('toast');
+        if (typeof tg !== 'undefined' && tg && tg.HapticFeedback) {
+            tg.HapticFeedback.notificationOccurred(type);
+        }
+    } catch (e) { /* تجاهل أخطاء الصوت/الاهتزاز */ }
+    
+    setTimeout(() => {
+        island.classList.remove('active');
+    }, 3500);
+}
 
     // ================= القفل الذكي (Session Lock) =================
     const APP_SALT = "AlShehab_Pay_Secure_Key_2026!@#_V2"; 
@@ -3454,30 +3498,62 @@ ${errorDetails}
         });
     }
 
-    async function checkPassword() {
-        if (isSettingPassword) {
-            savedPassword = await hashPin(currentPassword);
-            localStorage.setItem('app_password_hash', savedPassword);
-            localStorage.setItem('is_pin_salted', 'true');
-            isSettingPassword = false;
+async function checkPassword() {        
+    if (isSettingPassword) {
+        savedPassword = await hashPin(currentPassword);
+        localStorage.setItem('app_password_hash', savedPassword);
+        localStorage.setItem('is_pin_salted', 'true');
+        isSettingPassword = false;
+        localStorage.setItem('app_lock_time', Date.now() + LOCK_DELAY); 
+        document.getElementById('lock-screen').style.display = 'none';
+        
+        // ✅ تصفير كلمة المرور بعد النجاح (يمنع مشكلة النقاط المعلقة)
+        currentPassword = "";
+        updateDots();
+        
+        // ✅ تشغيل صوت النجاح (توحيد التجربة مع فرع الدخول)
+        try { playSound('success'); } catch(e) {}
+        try { if (typeof tg !== 'undefined' && tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success'); } catch(e) {}
+        
+        showToast("تم تعيين كلمة المرور المحمية بنجاح! 🛡️", "success");
+        
+        // ✅ تنفيذ أي رابط عميق معلق بعد الإعداد الأول
+        if (sessionStorage.getItem('pendingDeepLink')) {
+            setTimeout(() => {
+                if (typeof window.executePendingDeepLink === 'function') 
+                    window.executePendingDeepLink();
+            }, 400);
+        }
+        
+        softUpdate(); 
+    } else {
+        let inputHash = await hashPin(currentPassword);
+        if (inputHash === savedPassword) {
             localStorage.setItem('app_lock_time', Date.now() + LOCK_DELAY); 
             document.getElementById('lock-screen').style.display = 'none';
-            showToast("تم تعيين كلمة المرور المحمية بنجاح! 🛡️", "success");
+            
+            // ✅ تصفير كلمة المرور بعد النجاح (حماية من بقاء النقاط ممتلئة)
+            currentPassword = "";
+            updateDots();
+            
+            try { playSound('success'); } catch(e) {}
+            
+            // ✅ تنفيذ أي رابط عميق معلق بعد فك القفل
+            if (sessionStorage.getItem('pendingDeepLink')) {
+                setTimeout(() => {
+                    if (typeof window.executePendingDeepLink === 'function') 
+                        window.executePendingDeepLink();
+                }, 400);
+            }
+            
             softUpdate(); 
         } else {
-            let inputHash = await hashPin(currentPassword);
-            if (inputHash === savedPassword) {
-                localStorage.setItem('app_lock_time', Date.now() + LOCK_DELAY); 
-                document.getElementById('lock-screen').style.display = 'none';
-                playSound('success');
-                softUpdate(); 
-            } else {
-                showToast("كلمة المرور خاطئة!", "error");
-                currentPassword = "";
-                updateDots();
-            }
+            showToast("كلمة المرور خاطئة!", "error");
+            currentPassword = "";
+            updateDots();
         }
     }
+}
 
     // ================= إعدادات البصمة (Biometric Settings) =================
     let isBiometricEnabled = localStorage.getItem('biometric_enabled') !== 'false'; // مفعلة افتراضياً
@@ -3501,44 +3577,82 @@ ${errorDetails}
         }
     }
 
-    // ================= دالة البصمة الحقيقية (Native Biometric) =================
-    async function realBiometric(isAutoPrompt = false) {
-        if (!isAutoPrompt) playSound('click');
-        if (!isAutoPrompt && tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+// ================= دالة البصمة الحقيقية (Native Biometric) =================
+async function realBiometric(isAutoPrompt = false) {
+    // ✅ حماية: لا تعمل إلا في APK
+    if (!window.Capacitor || !window.Capacitor.Plugins.NativeBiometric) {
+        if (!isAutoPrompt) showToast("هذه الميزة تعمل فقط داخل تطبيق الهاتف (APK).", "warning");
+        return;
+    }
 
-        if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
-            const NativeBiometric = window.Capacitor.Plugins.NativeBiometric;
-            try {
-                const result = await NativeBiometric.isAvailable();
-                if (!result.isAvailable) {
-                    if (!isAutoPrompt) showToast("جهازك لا يدعم البصمة أو غير مفعلة.", "error");
-                    return;
-                }
-                
-                // استدعاء نافذة البصمة الأصلية للنظام
-                await NativeBiometric.verifyIdentity({
-                    reason: "قم بتأكيد هويتك لفتح التطبيق",
-                    title: "تسجيل الدخول",
-                    subtitle: "استخدم بصمة الإصبع أو الوجه",
-                    description: "الشهاب pro"
-                });
-                
-                // 🌟 إذا وصلنا إلى هذا السطر بدون أخطاء، يعني البصمة نجحت 100% 🌟
-                playSound('success');
-                document.getElementById('lock-screen').style.display = 'none';
-                localStorage.setItem('app_lock_time', Date.now() + LOCK_DELAY);
-                showToast("تم تسجيل الدخول بنجاح! 🛡️", "success");
-                softUpdate(); 
-                
-            } catch (e) {
-                console.log("Biometric error:", e);
-                // إذا كان الانبثاق تلقائياً وألغاه العميل، لا نظهر رسالة خطأ مزعجة
-                if (!isAutoPrompt) showToast("فشلت عملية التحقق أو تم الإلغاء.", "error");
+    // ✅ صوت + اهتزاز عند الطلب اليدوي فقط
+    if (!isAutoPrompt) {
+        try { playSound('click'); } catch(e) {}
+        try {
+            if (typeof tg !== 'undefined' && tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
             }
-        } else {
-            if (!isAutoPrompt) showToast("هذه الميزة تعمل فقط داخل تطبيق الهاتف (APK).", "warning");
+        } catch(e) {}
+    }
+
+    const NativeBiometric = window.Capacitor.Plugins.NativeBiometric;
+    
+    try {
+        // 1. فحص توفر البصمة
+        const result = await NativeBiometric.isAvailable();
+        if (!result.isAvailable) {
+            if (!isAutoPrompt) showToast("جهازك لا يدعم البصمة أو غير مفعلة.", "error");
+            return;
+        }
+        
+        // 2. استدعاء نافذة البصمة الأصلية
+        await NativeBiometric.verifyIdentity({
+            reason: "قم بتأكيد هويتك لفتح التطبيق",
+            title: "تسجيل الدخول",
+            subtitle: "استخدم بصمة الإصبع أو الوجه",
+            description: "الشهاب pro"
+        });
+        
+        // 🌟 نجحت البصمة 100% 🌟
+        
+        // 3. إغلاق شاشة القفل + حفظ وقت الفتح
+        document.getElementById('lock-screen').style.display = 'none';
+        localStorage.setItem('app_lock_time', Date.now() + LOCK_DELAY);
+        
+        // ✅ تصفير كلمة المرور (لمنع النقاط المعلقة إن فُتحت شاشة القفل لاحقاً)
+        currentPassword = "";
+        if (typeof updateDots === 'function') updateDots();
+        
+        // 4. صوت + اهتزاز النجاح
+        try { playSound('success'); } catch(e) {}
+        try {
+            if (typeof tg !== 'undefined' && tg && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+        } catch(e) {}
+        
+        showToast("تم تسجيل الدخول بنجاح! 🛡️", "success");
+        
+        // ✅ 5. تنفيذ أي رابط عميق معلق بعد فك القفل بالبصمة
+        if (sessionStorage.getItem('pendingDeepLink')) {
+            setTimeout(() => {
+                if (typeof window.executePendingDeepLink === 'function') {
+                    window.executePendingDeepLink();
+                }
+            }, 400);
+        }
+        
+        // 6. تحديث البيانات
+        softUpdate(); 
+        
+    } catch (e) {
+        console.log("Biometric error:", e);
+        // إذا كان الانبثاق تلقائياً وألغاه العميل، لا نظهر رسالة خطأ مزعجة
+        if (!isAutoPrompt) {
+            showToast("فشلت عملية التحقق أو تم الإلغاء.", "error");
         }
     }
+}
 
     // ================= السحب للتحديث (Pull-to-Refresh) المصحح =================
     let startY = 0; let isPulling = false;
@@ -3982,89 +4096,177 @@ ${errorDetails}
                 if(searchBtn) searchBtn.style.display = 'flex'; // السطر الجديد
             }
 
-            // ================= التفاعل مع الروابط العميقة (Deep Linking) =================
-            if (window.Capacitor && window.Capacitor.Plugins.App) {
-                window.Capacitor.Plugins.App.addListener('appUrlOpen', data => {
-                    console.log('🚀 تم فتح التطبيق عبر رابط عميق:', data.url);
-                    try {
-                        let url = new URL(data.url);
-                        let action = url.searchParams.get('action');
-                        let clientId = url.searchParams.get('client_id');
-                        let orderId = url.searchParams.get('order_id');
-                        
-                        if (action) {
-                            // 🚀 الإصلاح القاتل: استخدام sessionStorage ليتطابق مع المحرك الجديد
-                            sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
-                                route: action, 
-                                client_id: clientId, 
-                                order_id: orderId 
-                            }));
-                            
-                            // محاولة التنفيذ فوراً إذا كان التطبيق جاهزاً
-                            if (typeof window.executePendingDeepLink === 'function') {
-                                window.executePendingDeepLink();
-                            }
-                        }
-                    } catch (e) { console.error("Deep Link Error:", e); }
-                });
+// ================= التفاعل مع الروابط العميقة (Deep Linking) =================
+if (window.Capacitor && window.Capacitor.Plugins.App) {
+    window.Capacitor.Plugins.App.addListener('appUrlOpen', data => {
+        console.log('🚀 تم فتح التطبيق عبر رابط عميق:', data.url);
+        try {
+            let url = new URL(data.url);
+            let action    = url.searchParams.get('action');
+            let clientId  = url.searchParams.get('client_id');
+            let orderId   = url.searchParams.get('order_id');
+            let actionId  = url.searchParams.get('action_id');
+            let replyText = url.searchParams.get('reply_text');
+            let msgType   = url.searchParams.get('msg_type') || 'support';
+            let tripId    = url.searchParams.get('trip_id');
+            
+            // ✅ تطبيع actionId (حساسية الأحرف)
+            actionId = actionId ? actionId.toLowerCase().trim() : null;
+            
+            // ✅ التحقق من الأرقام (حماية من الحقن)
+            let safeClientId = clientId && !isNaN(parseInt(clientId)) ? parseInt(clientId) : null;
+            let safeOrderId  = orderId  && !isNaN(parseInt(orderId))  ? parseInt(orderId)  : null;
+            let safeTripId   = tripId   && !isNaN(parseInt(tripId))   ? parseInt(tripId)   : null;
+            
+            let authToken = localStorage.getItem('auth_token');
+            let deviceId  = typeof getDeviceId === 'function' ? getDeviceId() : (localStorage.getItem('secure_device_id') || '');
+            let serverUrl = (typeof SERVER_URL !== 'undefined' ? SERVER_URL : '');
+            
+            // ✅ درع مانع التكرار: نحفظ بصمة فريدة للحدث ونتجاهل المكرر خلال 5 ثوانٍ
+            let eventKey = `${actionId || action || ''}_${safeClientId || ''}_${safeOrderId || ''}_${(replyText || '').substring(0, 20)}`;
+            let lastEventKey = sessionStorage.getItem('lastDeepLinkEvent');
+            let lastEventTime = parseInt(sessionStorage.getItem('lastDeepLinkTime') || '0');
+            let now = Date.now();
+            
+            if (lastEventKey === eventKey && (now - lastEventTime) < 5000) {
+                console.log('🛡️ تم تجاهل حدث مكرر (خلال 5 ثوانٍ):', eventKey);
+                return;
             }
+            sessionStorage.setItem('lastDeepLinkEvent', eventKey);
+            sessionStorage.setItem('lastDeepLinkTime', String(now));
+            
+            // ✅ معالجة الرد المباشر من رابط URL
+            if (actionId === 'reply' && safeClientId && replyText && authToken) {
+                let fd = new FormData();
+                fd.append('client_id', safeClientId);
+                fd.append('message', replyText);
+                fd.append('msg_type', msgType);
+                fetch(serverUrl + '/api/chat/send', {
+                    method: 'POST', body: fd,
+                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                }).catch(e => console.log("Reply URL error:", e));
+            }
+            
+            // ✅ معالجة رفض الطلب من رابط URL
+            if (actionId === 'reject' && safeOrderId && authToken) {
+                let fd = new FormData();
+                fd.append('order_id', safeOrderId);
+                fetch(serverUrl + '/api/reject_order', {
+                    method: 'POST', body: fd,
+                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                }).catch(e => console.log("Reject URL error:", e));
+            }
+            
+            // ✅ معالجة الموافقة (توجيه لصفحة التسليم)
+            if (actionId === 'approve' && safeOrderId) {
+                if (typeof showToast === 'function') 
+                    showToast("✅ تم اعتماد الطلب - يرجى تسليم الكروت من صفحة العمليات", "success");
+                // التوجيه لصفحة التسليم
+                if (typeof switchScreen === 'function') {
+                    setTimeout(() => switchScreen('agent-give-screen'), 500);
+                }
+                return; // لا نحفظ pendingDeepLink (لأننا وجّهنا يدوياً)
+            }
+            
+            // ✅ حفظ pendingDeepLink للتوجيه (إن وُجد action)
+            if (action) {
+                sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
+                    route: action, 
+                    client_id: safeClientId, 
+                    order_id: safeOrderId,
+                    trip_id: safeTripId,   // ✅ أضفنا trip_id
+                    actionId: actionId
+                }));
+                
+                if (typeof window.executePendingDeepLink === 'function') {
+                    window.executePendingDeepLink();
+                }
+            }
+        } catch (e) { console.error("Deep Link Error:", e); }
+    });
+}
 
-            // ================= التفاعل مع اختصارات التطبيق والإشعارات (Deep Links) =================
-            setTimeout(() => {
-                const urlParams = new URLSearchParams(window.location.search);
-                const action = urlParams.get('action');
-                const targetClientId = urlParams.get('client_id'); 
-                const orderId = urlParams.get('order_id'); 
-                const actionId = urlParams.get('action_id'); 
-                const replyText = urlParams.get('reply_text'); 
-                
-                // 🚀 1. معالجة الرد المباشر من متصفح الويب
-                if (actionId === 'reply' && targetClientId && replyText) {
-                    let fd = new FormData();
-                    fd.append('client_id', targetClientId);
-                    fd.append('message', replyText);
-                    fd.append('msg_type', 'support');
-                    fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/chat/send', {
-                        method: 'POST', body: fd, headers: { 
-                            'Authorization': 'Bearer ' + localStorage.getItem('auth_token'),
-                            'X-Device-ID': typeof getDeviceId === 'function' ? getDeviceId() : localStorage.getItem('secure_device_id')
-                        }
-                    });
-                    // تم إزالة return لكي يكمل التوجيه
-                }
-                
-                if (actionId === 'reject' && orderId) {
-                    let fd = new FormData();
-                    fd.append('order_id', orderId);
-                    fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/reject_order', {
-                        method: 'POST', body: fd, headers: { 
-                            'Authorization': 'Bearer ' + localStorage.getItem('auth_token'),
-                            'X-Device-ID': typeof getDeviceId === 'function' ? getDeviceId() : localStorage.getItem('secure_device_id')
-                        }
-                    });
-                    // تم إزالة return لكي يكمل التوجيه
-                }
+// ================= التفاعل مع اختصارات التطبيق والإشعارات (Deep Links) =================
+setTimeout(() => {              
+    // 🛡️ في APK: استقالة كاملة (appUrlOpen يتولى كل شيء)
+    const isAPK = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    if (isAPK) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const action         = urlParams.get('action');
+    const targetClientId = urlParams.get('client_id'); 
+    const orderId        = urlParams.get('order_id'); 
+    const actionId       = urlParams.get('action_id'); 
+    const replyText      = urlParams.get('reply_text'); 
+    
+    // 🛡️ درع منع التكرار
+    let eventKey = `url_${actionId || action || ''}_${targetClientId || ''}_${orderId || ''}_${(replyText || '').substring(0, 20)}`;
+    let lastKey  = sessionStorage.getItem('lastUrlHandlerKey');
+    let lastTime = parseInt(sessionStorage.getItem('lastUrlHandlerTime') || '0');
+    let now      = Date.now();
+    
+    if (lastKey === eventKey && (now - lastTime) < 5000) {
+        console.log('🛡️ تجاهل URL handler مكرر:', eventKey);
+        return;
+    }
+    sessionStorage.setItem('lastUrlHandlerKey', eventKey);
+    sessionStorage.setItem('lastUrlHandlerTime', String(now));
+    
+    if (actionId === 'reply' && targetClientId && replyText) {
+        let fd = new FormData();
+        fd.append('client_id', targetClientId);
+        fd.append('message', replyText);
+        fd.append('msg_type', 'support');
+        fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/chat/send', {
+            method: 'POST', body: fd, headers: { 
+                'Authorization': 'Bearer ' + localStorage.getItem('auth_token'),
+                'X-Device-ID': typeof getDeviceId === 'function' ? getDeviceId() : localStorage.getItem('secure_device_id')
+            }
+        }).catch(e => console.log("URL reply error:", e));
+    }
+    
+    if (actionId === 'reject' && orderId) {
+        let fd = new FormData();
+        fd.append('order_id', orderId);
+        fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/reject_order', {
+            method: 'POST', body: fd, headers: { 
+                'Authorization': 'Bearer ' + localStorage.getItem('auth_token'),
+                'X-Device-ID': typeof getDeviceId === 'function' ? getDeviceId() : localStorage.getItem('secure_device_id')
+            }
+        }).catch(e => console.log("URL reject error:", e));
+    }
 
-                // 🚀 2. معالجة التوجيه الذكي العادي
-                if (action) {
-                    console.log("🚀 تم فتح التطبيق عبر رابط عميق أو إشعار:", action);
-                    sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
-                        route: action, 
-                        client_id: targetClientId, 
-                        order_id: orderId,
-                        actionId: actionId // 👈 تمرير نوع الزر لمنع الانبثاق المزدوج
-                    }));
-                    
-                    if (typeof window.executePendingDeepLink === 'function') {
-                        window.executePendingDeepLink();
-                    }
-                }
-                
-                // تنظيف الرابط مرة واحدة في النهاية
-                if (action || actionId) {
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }, 500);
+    // ✅ معالجة الموافقة (توجيه لصفحة التسليم) - جديد
+    if (actionId === 'approve' && orderId) {
+        if (typeof showToast === 'function') 
+            showToast("✅ تم اعتماد الطلب - يرجى تسليم الكروت", "success");
+        setTimeout(() => {
+            if (typeof switchScreen === 'function') switchScreen('agent-give-screen');
+        }, 500);
+        // تنظيف الرابط
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return; // لا نحفظ pendingDeepLink (وجّهنا يدوياً)
+    }
+
+    if (action) {
+        console.log("🚀 [PWA] رابط عميق:", action);
+        sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
+            route: action, 
+            client_id: targetClientId, 
+            order_id: orderId,
+            actionId: actionId,
+            reply_text: replyText
+        }));
+        
+        if (typeof window.executePendingDeepLink === 'function') {
+            window.executePendingDeepLink();
+        }
+    }
+    
+    if (action || actionId) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}, 500);
 
             // ===============================================================================
 
@@ -7269,86 +7471,109 @@ async function fetchClientPermission(clientId) {
         return deviceId;
     }
 
-               // ===============================================================
-        // 🚀 نظام الدخول السلس والموحد (SSO) من تطبيق دكاني
-        // ===============================================================
-        async function checkSSOLogin() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const ssoToken = urlParams.get('sso_token');
-            
-            if (ssoToken) {
-                // 1. إيقاف وإخفاء شاشة الدخول والبصمة فوراً بقوة!
-                let loginScreen = document.getElementById('login-screen');
-                if (loginScreen) loginScreen.style.display = 'none !important';
-                
-                // إظهار شاشة التحميل فقط لكي لا يرى المستخدم أي تشتت
-                let splash = document.getElementById('splash-screen');
-                if (splash) {
-                    splash.style.display = 'flex';
-                    splash.style.opacity = '1';
-                    splash.style.zIndex = '9999999';
-                }
-
-                try {
-                    // 🌟 التعديل: إضافة SERVER_URL لكي يعمل الربط بنجاح من داخل تطبيق الهاتف (APK)
-                    let res = await fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/b2b/sso_login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sso_token: ssoToken })
-                    });
-                    let data = await res.json();
-                    
-                    if (data.status === 'success') {
-                        // حفظ الجلسة الدائمة
-                        localStorage.setItem('auth_token', data.token);
-                        localStorage.setItem('user_role', data.role);
-                        localStorage.setItem('saved_user_id', data.telegram_id); // 🌟 حفظ الآيدي المعتمد
-                        localStorage.setItem('telegram_id', data.telegram_id);
-                        localStorage.setItem('user_name', data.name);
-                        
-                        // 🌟 السحر هنا: إخبار نظام القفل أن الدخول من دكاني معتمد وموثوق
-                        localStorage.setItem('sso_from_dukkani', 'true');
-                        localStorage.setItem('app_lock_time', (Date.now() + 30 * 24 * 60 * 60 * 1000).toString());
-                        
-                        // مسح التوكن من الرابط نهائياً لحمايته
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                        
-                        // إعادة تحميل الصفحة للدخول كالسحر
-                        window.location.reload();
-                        return true; // نجاح الـ SSO
-                    } else {
-                        showToast("❌ " + data.message, false);
-                    }
-                } catch (e) {
-                    showToast("❌ خطأ في الاتصال بالبوابة", false);
-                }
-            }
-            return false; // لا يوجد SSO
-        }
+// ===============================================================
+// 🚀 نظام الدخول السلس والموحد (SSO) من تطبيق دكاني
+// ===============================================================
+async function checkSSOLogin() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ssoToken = urlParams.get('sso_token');
+    
+    if (ssoToken) {
+        // 1. إيقاف وإخفاء شاشة الدخول والبصمة فوراً بقوة!
+        let loginScreen = document.getElementById('login-screen');
+        if (loginScreen) loginScreen.style.display = 'none !important';
         
-        // 👇 التعديل الأهم: اعتراض التشغيل لمنع البصمة من الظهور 👇
-        // ابحث عن document.addEventListener('DOMContentLoaded' ... القديمة واحذفها إن وجدت
-        document.addEventListener('DOMContentLoaded', async () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            // إذا كان هناك توكن، نوقف كل شيء ونشغل الـ SSO فقط!
-            if (urlParams.get('sso_token')) {
-                await checkSSOLogin();
-            } else {
-                // إذا لم يكن هناك توكن، نشغل النظام العادي (بصمة، شاشة ترحيب، إلخ)
-                // تأكد أن الدوال الأساسية الخاصة بك (مثل تطبيق المظهر) تعمل هنا
-                if(typeof applyDarkMode === 'function') applyDarkMode();
-                if(typeof applyBioMode === 'function') applyBioMode();
-                
-                // إخفاء شاشة التحميل بعد ثانيتين كما هو معتاد في الشهاب
-                setTimeout(() => {
-                    let splash = document.getElementById('splash-screen');
-                    if(splash) {
-                        splash.style.opacity = '0';
-                        setTimeout(() => { splash.style.display = 'none'; }, 500);
-                    }
-                }, 2000);
+        // إظهار شاشة التحميل فقط لكي لا يرى المستخدم أي تشتت
+        let splash = document.getElementById('splash-screen');
+        if (splash) {
+            splash.style.display = 'flex';
+            splash.style.opacity = '1';
+            splash.style.zIndex = '9999999';
+        }
+
+        try {
+            // 🔒 الإصلاح الأمني: جلب بصمة الجهاز وربط الجلسة بها
+            // هذا يمنع سرقة الـ sso_token واستخدامه من جهاز آخر
+            let deviceId = '';
+            try {
+                deviceId = (typeof getDeviceId === 'function') 
+                    ? getDeviceId() 
+                    : (localStorage.getItem('secure_device_id') || '');
+            } catch(e) {
+                console.warn('تعذر جلب device_id:', e);
             }
-        });
+
+            // 🌟 التعديل: إضافة SERVER_URL لكي يعمل الربط بنجاح من داخل تطبيق الهاتف (APK)
+            let res = await fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/b2b/sso_login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    sso_token: ssoToken,
+                    device_id: deviceId  // ✅ جديد: ربط الجلسة ببصمة الجهاز
+                })
+            });
+            let data = await res.json();
+            
+            if (data.status === 'success') {
+                // حفظ الجلسة الدائمة
+                localStorage.setItem('auth_token', data.token);
+                localStorage.setItem('user_role', data.role);
+                localStorage.setItem('saved_user_id', data.telegram_id); // 🌟 حفظ الآيدي المعتمد
+                localStorage.setItem('telegram_id', data.telegram_id);
+                localStorage.setItem('user_name', data.name);
+                
+                // 🌟 السحر هنا: إخبار نظام القفل أن الدخول من دكاني معتمد وموثوق
+                localStorage.setItem('sso_from_dukkani', 'true');
+                localStorage.setItem('app_lock_time', (Date.now() + 30 * 24 * 60 * 60 * 1000).toString());
+                
+                // مسح التوكن من الرابط نهائياً لحمايته
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // إعادة تحميل الصفحة للدخول كالسحر
+                window.location.reload();
+                return true; // نجاح الـ SSO
+            } else {
+                // ❌ عرض رسالة الخطأ (قد تكون: حساب مجمد، جهاز مختلف، توكن منتهي)
+                showToast("❌ " + (data.message || "فشل الدخول"), false);
+                
+                // إذا كانت المشكلة في الجهاز، نظهر نافذة فخمة
+                if (data.message && data.message.includes('هاتف آخر')) {
+                    setTimeout(() => {
+                        alert("⛔ هذا الحساب مربوط بهاتف آخر.\n\nتواصل مع الإدارة لفك الربط.");
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            console.error('SSO Error:', e);
+            showToast("❌ خطأ في الاتصال بالبوابة", false);
+        }
+    }
+    return false; // لا يوجد SSO
+}
+
+// 👇 التعديل الأهم: اعتراض التشغيل لمنع البصمة من الظهور 👇
+// ابحث عن document.addEventListener('DOMContentLoaded' ... القديمة واحذفها إن وجدت
+document.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    // إذا كان هناك توكن، نوقف كل شيء ونشغل الـ SSO فقط!
+    if (urlParams.get('sso_token')) {
+        await checkSSOLogin();
+    } else {
+        // إذا لم يكن هناك توكن، نشغل النظام العادي (بصمة، شاشة ترحيب، إلخ)
+        // تأكد أن الدوال الأساسية الخاصة بك (مثل تطبيق المظهر) تعمل هنا
+        if(typeof applyDarkMode === 'function') applyDarkMode();
+        if(typeof applyBioMode === 'function') applyBioMode();
+        
+        // إخفاء شاشة التحميل بعد ثانيتين كما هو معتاد في الشهاب
+        setTimeout(() => {
+            let splash = document.getElementById('splash-screen');
+            if(splash) {
+                splash.style.opacity = '0';
+                setTimeout(() => { splash.style.display = 'none'; }, 500);
+            }
+        }, 2000);
+    }
+});
 
     // ================= دالة تسجيل الدخول المباشر والآمن (مع بصمة الهاتف) =================
     async function loginClient() {
@@ -7722,14 +7947,13 @@ function getTripStatusInfo(status) {
 }
 
 async function createTripWizard() {
+    // إغلاق أي نافذة مفتوحة حالياً
     document.getElementById('smart-dialog-overlay').style.display = 'none';
     playSound('click');
     showToast("⏳ جاري جلب المناديب...", "warning");
     
     try {
-        // 1. جلب المناديب
-        let res = await safeGet('/api/manage_sub_agents?action=get');
-        // fallback: استخدم نفس الـ endpoint
+        // 🌟 الإصلاح الجذري: حذف طلب safeGet الذي كان يسبب التعليق، والاعتماد على safeFetch فقط
         let fd = new FormData();
         fd.append('action', 'get');
         let data = await safeFetch('/api/manage_sub_agents', fd);
@@ -7742,7 +7966,7 @@ async function createTripWizard() {
             });
         }
         
-        // 2. اختيار المندوب
+        // 1. اختيار المندوب
         let agentOptions = data.sub_agents.map(s => ({
             value: s.user_id,
             text: s.name,
@@ -7753,7 +7977,7 @@ async function createTripWizard() {
         let agentId = await smartSelect("اختر المندوب", agentOptions);
         if (!agentId) return;
         
-        // 3. اختيار الوضع
+        // 2. اختيار نوع الرحلة
         let mode = await smartSelect("نوع الرحلة", [
             { value: 'names_only', text: '📝 أسماء فقط (المندوب يقرر الكميات)', icon: 'fa-list', color: '#00d2ff' },
             { value: 'names_with_qty', text: '📦 أسماء + كميات محددة', icon: 'fa-boxes', color: '#38ef7d' },
@@ -7761,7 +7985,7 @@ async function createTripWizard() {
         ]);
         if (!mode) return;
         
-        // 4. التاريخ
+        // 3. التاريخ
         let tripDate = await smartDialog({
             type: 'prompt', title: 'تاريخ الرحلة',
             message: 'أدخل التاريخ (YYYY-MM-DD) أو اتركه فارغاً = اليوم:',
@@ -7770,7 +7994,7 @@ async function createTripWizard() {
         });
         if (tripDate === null) return; // إلغاء
         
-        // 5. ملاحظات
+        // 4. ملاحظات
         let notes = await smartDialog({
             type: 'prompt', title: 'ملاحظات',
             message: 'أي توجيهات للمندوب؟ (اختياري):',
@@ -7778,7 +8002,7 @@ async function createTripWizard() {
             inputType: 'text', placeholder: 'مثال: ركز على بقالات المنطقة الشرقية'
         });
         
-        // 6. إنشاء
+        // 5. إنشاء الرحلة
         showToast("⏳ جاري الإنشاء...", "warning");
         let createFd = new FormData();
         createFd.append('agent_id', agentId);
@@ -7788,7 +8012,7 @@ async function createTripWizard() {
         createFd.append('planned_clients', '[]');
         
         let result = await safeFetch('/api/trips/create', createFd);
-        if (result.status === 'success') {
+        if (result && result.status === 'success') {
             playSound('success');
             smartDialog({
                 type: 'alert', title: 'تم بنجاح ✅',
@@ -7797,7 +8021,7 @@ async function createTripWizard() {
             });
             setTimeout(openTripsManager, 1500);
         } else {
-            showToast(result.message || "خطأ", "error");
+            showToast((result && result.message) ? result.message : "خطأ", "error");
         }
     } catch (e) {
         console.error(e);
@@ -7979,10 +8203,7 @@ function renderSubAgentsListDialog() {
     html += `<button class="btn btn-retail" style="width: 100%; margin-top: 15px; font-weight:bold; font-size:14px;" onclick="openSubAgentForm(null)">
                 <i class="fas fa-user-plus"></i> إضافة مندوب جديد (تحديد الصلاحيات)
              </button>`;
-    html += `<button class="btn" style="width: 100%; margin-top: 8px; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: #000; font-weight:bold; font-size:14px;" onclick="openTripsManager()">
-                <i class="fas fa-route"></i> 🛵 إدارة الرحلات
-             </button>`;
-    
+      
     smartDialog({
         type: 'alert',
         title: '🛵 إدارة المناديب والوكلاء الفرعيين',
@@ -7993,7 +8214,12 @@ function renderSubAgentsListDialog() {
 }
 
     // 🌟 دالة اختيار فترة التقرير للمندوب
-    async function showActivityReport(subId) {
+    async function showActivityReport(subId) {       
+    // 🌟 الحل السحري: إغلاق نافذة المناديب الحالية أولاً لكي لا تتداخل النوافذ
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    
+    // 🌟 تأخير بسيط لكي يتم إغلاق النافذة القديمة قبل فتح الجديدة
+    setTimeout(async () => {
         let choice = await smartSelect("نوع التقرير", [
             { value: 'today', text: '📅 تقرير اليوم الميداني', icon: 'fa-calendar-day', color: '#00d2ff' },
             { value: 'custom', text: '📆 تقرير العهدة (فترة مخصصة)', icon: 'fa-calendar-alt', color: '#f5af19' }
@@ -8012,21 +8238,25 @@ function renderSubAgentsListDialog() {
         }
 
         openSubAgentReport(subId, startDate, endDate);
-    }
+    }, 300);
+}
 
     // 🌟 دالة فتح واستعراض تقرير نشاط المندوب
-    async function openSubAgentReport(subId, startDate, endDate) {
-        playSound('click');
-        showToast("⏳ جاري استخراج تقرير نشاط المندوب...", "warning");
+  async function openSubAgentReport(subId, startDate, endDate) {        
+    document.getElementById('smart-dialog-overlay').style.display = 'none'; // إغلاق إجباري لأي نافذة سابقة
+    playSound('click');
+    showToast("⏳ جاري استخراج تقرير نشاط المندوب...", "warning");
 
-        try {
-            let fd = new FormData();
-            fd.append('sub_id', subId);
-            fd.append('start_date', startDate);
-            fd.append('end_date', endDate);
+    try {
+        let fd = new FormData();
+        fd.append('sub_id', subId);
+        fd.append('start_date', startDate);
+        fd.append('end_date', endDate);
 
-            let res = await safeFetch('/api/sub_agent_activity_report', fd);
-            if (res.status === 'success') {
+        let res = await safeFetch('/api/sub_agent_activity_report', fd);
+        
+        if (res && res.status === 'success') {
+            
                 let html = `
                 <div style="text-align: right; max-height: 420px; overflow-y: auto; padding: 5px; font-size: 13px; line-height: 1.6;">
                     
@@ -10933,7 +11163,7 @@ async function subAgentCompleteTrip(tripId) {
 
         // 4. العمليات الميدانية
         setVisible('button[onclick*="agent-give-screen"]', perms.cards_sell !== false);
-        setVisible('button[onclick*="agentQuickSale"]', perms.quick_sale !== false);
+        setVisible('button[onclick*="agentQuickSale"]', perms.quick_sale === true); // إجبار النظام على إخفاء الزر ما لم تكن الصلاحية محددة بـ true
         setVisible('button[onclick*="startTransferWizard"]', perms.transfer === true);
         setVisible('button[onclick*="startReturnWizard"]', perms.returns === true);
         setVisible('button[onclick*="viewSupportTickets"]', perms.returns === true);
@@ -11691,28 +11921,44 @@ async function giveCardsToClient() {
 
     // ================= دالة البيع السريع الشاملة (معدلة لدعم الكروت الإلكترونية) =================
     async function agentQuickSale(preSelectedCard = null) {
-        playSound('click');
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-
-        let cardType = preSelectedCard;
-        let cachedData = JSON.parse(localStorage.getItem('cached_network_data') || '{"inventory":[], "clients":[]}');
-
-        if (!cardType) {
-            if (cachedData.inventory.length === 0) {
-                showToast("⏳ جاري جلب الفئات...", "warning");
-                let res = await safeGet('/api/network_data');
-                cachedData = await res.json();
-                localStorage.setItem('cached_network_data', JSON.stringify(cachedData));
-            }
-            let cardsList = cachedData.inventory.map(i => {
-                let match = i.card_type.match(/\d+/);
-                let imgName = match ? match[0] : 'logo';
-                return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
-            });
-            cardType = await smartSelect("اختر فئة الكرت للبيع", cardsList);
-            if (!cardType) return;
+    // 🛡️ الحارس الأمني: فحص صلاحية المندوب قبل تنفيذ أي شيء
+    let userRole = localStorage.getItem('user_role');
+    if (userRole === 'sub_agent') {
+        let perms = {};
+        try {
+            let token = localStorage.getItem('auth_token');
+            if (token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
+        } catch(e) {}
+        
+        // إذا لم تكن الصلاحية محددة بـ true، يتم رفض العملية
+        if (perms.quick_sale !== true) {
+            if (typeof playSound === 'function') playSound('error');
+            return showToast("⛔ ليس لديك صلاحية البيع الطياري المباشر. راجع الوكيل.", "error");
         }
+    }
 
+    playSound('click');
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+    let cardType = preSelectedCard;
+    let cachedData = JSON.parse(localStorage.getItem('cached_network_data') || '{"inventory":[], "clients":[]}');
+
+    if (!cardType) {
+        if (cachedData.inventory.length === 0) {
+            showToast("⏳ جاري جلب الفئات...", "warning");
+            let res = await safeGet('/api/network_data');
+            cachedData = await res.json();
+            localStorage.setItem('cached_network_data', JSON.stringify(cachedData));
+        }
+        let cardsList = cachedData.inventory.map(i => {
+            let match = i.card_type.match(/\d+/);
+            let imgName = match ? match[0] : 'logo';
+            return { value: i.card_type, text: i.card_type, img: `${SERVER_URL}/static/${imgName}.png` };
+        });
+        cardType = await smartSelect("اختر فئة الكرت للبيع", cardsList);
+        if (!cardType) return;
+    }
+   
         // 🌟 1. التحذير الذكي إذا كان الكرت إلكترونياً 🌟
         let isEcard = cardType.includes('إلكتروني') || cardType.includes('الكتروني');
                 if (isEcard && !navigator.onLine) {
@@ -15281,7 +15527,7 @@ function performGlobalSearch() {
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- كود ربط الإشعارات الأصلية (Native) لتطبيق الأندرويد -->
+<!-- كود ربط الإشعارات الأصلية (Native) لتطبيق الأندرويد -->
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             // 🌟 تم حذف الرادار المزعج نهائياً 🌟
@@ -15324,61 +15570,94 @@ function performGlobalSearch() {
                                 console.log("FCM Error:", error);
                             });
 
+                            // ✅ تم التعديل: إضافة route لكي يكون الإشعار قابلاً للضغط
                             PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                                showToast("🔔 " + notification.title + " - " + notification.body);
+                                // ✅ استخراج route من data الإشعار
+                                const route = (notification.data && notification.data.route) || 
+                                              (notification.notification && notification.notification.data && notification.notification.data.route) || 
+                                              null;
+                                const title = notification.title || (notification.notification && notification.notification.title) || 'إشعار جديد';
+                                const body  = notification.body  || (notification.notification && notification.notification.body)  || '';
+                                
+                                // ✅ تمرير route لكي يكون الإشعار قابلاً للضغط
+                                showToast("🔔 " + title + (body ? " - " + body : ""), 'success', route);
+                                
                                 if (typeof softUpdate === "function") softUpdate();
                             });
-                                                                                                                                             
-                            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-                                const data = notification.notification.data;
-                                const actionId = notification.actionId; 
-                                const inputValue = notification.inputValue; 
-                                const authToken = localStorage.getItem('auth_token'); 
-                                const deviceId = typeof getDeviceId === 'function' ? getDeviceId() : localStorage.getItem('secure_device_id');
-                                
-                                if (data && data.route) {
-                                    // 🚀 1. الرد المباشر من خارج التطبيق (Inline Reply)
-                                    if (actionId === 'reply' && data.client_id && inputValue) {
-                                        let fd = new FormData();
-                                        fd.append('client_id', data.client_id);
-                                        fd.append('message', inputValue);
-                                        fd.append('msg_type', 'support');
-                                        
-                                        fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/chat/send', {
-                                            method: 'POST', body: fd, headers: { 
-                                                'Authorization': 'Bearer ' + authToken,
-                                                'X-Device-ID': deviceId
-                                            }
-                                        }).then(res => res.json()).then(resData => {
-                                            if (resData.status === 'success') console.log("✅ تم إرسال الرد من خارج التطبيق!");
-                                        }).catch(e => console.log("❌ خطأ في الإرسال من الخارج"));
-                                    }
 
-                                    // 🚀 2. رفض الطلب من خارج التطبيق
-                                    if (actionId === 'reject' && data.order_id) {
-                                        let fd = new FormData();
-                                        fd.append('order_id', data.order_id);
-                                        fetch((typeof SERVER_URL !== 'undefined' ? SERVER_URL : '') + '/api/reject_order', {
-                                            method: 'POST', body: fd, headers: { 
-                                                'Authorization': 'Bearer ' + authToken,
-                                                'X-Device-ID': deviceId
-                                            }
-                                        });
-                                    }
-                                    
-                                    // 🚀 3. التوجيه الذكي
-                                    sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
-                                        route: data.route, 
-                                        client_id: data.client_id,
-                                        order_id: data.order_id,
-                                        actionId: actionId // 👈 ضروري لمنع الانبثاق المزدوج
-                                    }));
-                                    
-                                    if (typeof window.executePendingDeepLink === 'function') {
-                                        window.executePendingDeepLink();
-                                    }
-                                }
-                            });
+                            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {                                
+    const data       = notification.notification.data;
+    const actionId   = notification.actionId; 
+    const inputValue = notification.inputValue; 
+    
+    // 🛡️ درع منع التكرار: نحفظ بصمة الحدث لتفادي المعالجة المزدوجة مع appUrlOpen
+    let eventKey = `push_${actionId || 'default'}_${(data && data.client_id) || ''}_${(data && data.order_id) || ''}_${(inputValue || '').substring(0, 20)}`;
+    let lastKey  = sessionStorage.getItem('lastPushActionKey');
+    let lastTime = parseInt(sessionStorage.getItem('lastPushActionTime') || '0');
+    let now      = Date.now();
+    
+    if (lastKey === eventKey && (now - lastTime) < 5000) {
+        console.log('🛡️ تم تجاهل حدث push مكرر:', eventKey);
+        return;
+    }
+    sessionStorage.setItem('lastPushActionKey', eventKey);
+    sessionStorage.setItem('lastPushActionTime', String(now));
+    
+    if (data && data.route) {
+        // ✅ نحفظ pendingDeepLink مع reply_text ليستخدمه appUrlOpen
+        sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
+            route: data.route, 
+            client_id: data.client_id,
+            order_id: data.order_id,
+            actionId: actionId,
+            reply_text: inputValue || null
+        }));
+        
+        // ✅ إذا كان هناك رد/رفض/موافقة، نُرسل API مرة واحدة فقط (dedup يمنع التكرار مع appUrlOpen)
+        if ((actionId === 'reply' && data.client_id && inputValue) || 
+            (actionId === 'reject' && data.order_id) ||
+            (actionId === 'approve' && data.order_id)) {
+            
+            const authToken = localStorage.getItem('auth_token');
+            const deviceId  = typeof getDeviceId === 'function' ? getDeviceId() : (localStorage.getItem('secure_device_id') || '');
+            const serverUrl = (typeof SERVER_URL !== 'undefined' ? SERVER_URL : '');
+            
+            if (actionId === 'reply' && inputValue && authToken) {
+                let fd = new FormData();
+                fd.append('client_id', data.client_id);
+                fd.append('message', inputValue);
+                fd.append('msg_type', 'support');
+                fetch(serverUrl + '/api/chat/send', {
+                    method: 'POST', body: fd,
+                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                }).catch(e => console.log("Reply error:", e));
+            }
+            
+            if (actionId === 'reject' && data.order_id && authToken) {
+                let fd = new FormData();
+                fd.append('order_id', data.order_id);
+                fetch(serverUrl + '/api/reject_order', {
+                    method: 'POST', body: fd,
+                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                }).catch(e => console.log("Reject error:", e));
+            }
+            
+            // ✅ معالجة الموافقة (توجيه لصفحة التسليم)
+            if (actionId === 'approve' && data.order_id) {
+                if (typeof showToast === 'function') 
+                    showToast("✅ تم اعتماد الطلب - يرجى تسليم الكروت", "success");
+                setTimeout(() => {
+                    if (typeof switchScreen === 'function') switchScreen('agent-give-screen');
+                }, 500);
+                return; // لا نستدعي executePendingDeepLink (وجّهنا يدوياً)
+            }
+        }
+        
+        if (typeof window.executePendingDeepLink === 'function') {
+            window.executePendingDeepLink();
+        }
+    }
+});
 
                             let permStatus = await PushNotifications.requestPermissions();
                             if (permStatus.receive === 'granted') {
@@ -15399,7 +15678,7 @@ function performGlobalSearch() {
                 }
             }, 1500);
         });
-        
+ 
         // =====================================================================
 // 🛵 دوال الصلاحيات الجديدة للمندوب
 // =====================================================================
