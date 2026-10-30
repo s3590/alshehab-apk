@@ -2286,7 +2286,8 @@
     <div class="modal-content">
         <div class="chat-header">
             <h3 style="font-size: 16px;"><i class="fas fa-headset"></i> الدعم الفني والطلبات</h3>
-            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" onclick="document.getElementById('chatModal').style.display='none'"></i>
+            <i class="fas fa-times" style="color: #ff4757; font-size: 22px; cursor: pointer;" 
+               onclick="window.currentChatClientId=null; document.getElementById('chatModal').style.display='none'; document.querySelector('#chatModal .chat-header h3').innerHTML='<i class=\'fas fa-headset\'></i> الدعم الفني والطلبات';"></i>
         </div>
         <div class="chat-messages" id="chatMessages">
             <!-- الرسائل ستظهر هنا -->
@@ -2301,7 +2302,8 @@
         </div>
         
         <!-- زر الرجوع -->
-        <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" onclick="document.getElementById('chatModal').style.display='none'">
+        <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" 
+                onclick="window.currentChatClientId=null; document.getElementById('chatModal').style.display='none'; document.querySelector('#chatModal .chat-header h3').innerHTML='<i class=\'fas fa-headset\'></i> الدعم الفني والطلبات';">
             <i class="fas fa-arrow-right"></i> رجوع
         </button>
     </div>
@@ -2695,8 +2697,8 @@ async function checkForUpdates() {
 
     let availableCards = [];
 
-    // ================= نظام التوجيه الذكي للروابط والإشعارات (محمي من الـ Reload وتداخل النوافذ) =================
-    window.executePendingDeepLink = function() {        
+// ================= نظام التوجيه الذكي للروابط والإشعارات (محمي من الـ Reload وتداخل النوافذ) =================
+window.executePendingDeepLink = function() {        
     let savedAction = sessionStorage.getItem('pendingDeepLink');
     if (!savedAction) return;
     
@@ -2711,6 +2713,14 @@ async function checkForUpdates() {
     }
 
     let action = JSON.parse(savedAction);
+    
+    // ✅ حماية من الروابط القديمة (أكثر من 5 دقائق)
+    if (action._ts && (Date.now() - action._ts) > 5 * 60 * 1000) {
+        console.log("⏳ رابط عميق قديم - تم تجاهله");
+        sessionStorage.removeItem('pendingDeepLink');
+        return;
+    }
+    
     sessionStorage.removeItem('pendingDeepLink'); 
 
     // إغلاق أي نوافذ مفتوحة لضمان عدم التداخل
@@ -2727,7 +2737,13 @@ async function checkForUpdates() {
             } else {
                 let targetClientId = parseInt(action.client_id);
                 if (currentUserId === ADMIN_ID && targetClientId) {
-                    if (typeof adminQuickReplyToClient === 'function') adminQuickReplyToClient(targetClientId);
+                    // ✅ الإصلاح الحرج: فتح المحادثة الكاملة بدلاً من dialog
+                    if (typeof openChatWithClient === 'function') {
+                        openChatWithClient(targetClientId);
+                    } else if (typeof adminQuickReplyToClient === 'function') {
+                        // fallback احتياطي إذا لم تكن الدالة الجديدة موجودة
+                        adminQuickReplyToClient(targetClientId);
+                    }
                 } else if (typeof openChat === 'function') {
                     openChat();
                 }
@@ -5070,11 +5086,13 @@ async function orderNetworkCards() {
     }
 
     // ================= نظام المحادثة الشامل (Chat) =================
-    function openChat() {
-        playSound('click');
-        document.getElementById('chatModal').style.display = 'flex';
-        loadChatHistory();
-    }
+ function openChat() {       
+    playSound('click');
+    // ✅ إعادة تعيين المتغير لضمان عدم إرسال رسائل لعميل سابق
+    window.currentChatClientId = null;
+    document.getElementById('chatModal').style.display = 'flex';
+    loadChatHistory();
+}
 
     async function loadChatHistory() {
         let container = document.getElementById('chatMessages');
@@ -5103,36 +5121,59 @@ async function orderNetworkCards() {
         } catch (e) { container.innerHTML = '<div style="text-align:center; color:#ff4757; margin-top:20px;">خطأ في تحميل الرسائل.</div>'; }
     }
 
-    async function sendChatMessage(text = null) {
-        let input = document.getElementById('chatInput');
-        let msgText = text || input.value.trim();
-        let msgType = document.getElementById('chatMsgType') ? document.getElementById('chatMsgType').value : 'support';
-        
-        if (!msgText) return;
-        if (!text) input.value = ''; 
-        
-        let container = document.getElementById('chatMessages');
-        container.insertAdjacentHTML('beforeend', `
-            <div class="chat-bubble client" style="opacity: 0.7;">
-                ${msgText}
-                <span class="chat-time"><i class="fas fa-clock"></i> جاري الإرسال...</span>
-            </div>
-        `);
-        container.scrollTop = container.scrollHeight;
-
-        let fd = new FormData();
-        fd.append('client_id', userId);
-        fd.append('message', msgText);
-        fd.append('msg_type', msgType);
-
-        try {
-            let res = await safeFetch('/api/chat/send', fd);
-            if (res.status === 'success') {
-                playSound('success');
-                loadChatHistory(); 
-            } else { showToast("خطأ في الإرسال", "error"); }
-        } catch (e) { showToast("خطأ في الاتصال", "error"); }
+async function sendChatMessage(text = null) {
+    let input = document.getElementById('chatInput');
+    let msgText = text || input.value.trim();
+    let msgType = document.getElementById('chatMsgType') ? document.getElementById('chatMsgType').value : 'support';
+    
+    if (!msgText) return;
+    if (!text) input.value = ''; 
+    
+    // ✅ الإصلاح الحرج: تحديد المستقبل الصحيح
+    let userRole = localStorage.getItem('user_role');
+    let isAdmin = (typeof userId !== 'undefined' && (userId === ADMIN_ID || userId === MANAGER_ID));
+    let isAgentReplying = false;
+    let targetClientId = userId;
+    
+    // إذا كان الوكيل/المدير يرد على عميل محدد
+    if (isAdmin && window.currentChatClientId) {
+        targetClientId = window.currentChatClientId;
+        isAgentReplying = true;
     }
+    
+    let container = document.getElementById('chatMessages');
+    // ✅ الفقاعة تظهر من الوكيل إذا كان رداً إدارياً
+    let bubbleClass = isAgentReplying ? 'admin' : 'client';
+    container.insertAdjacentHTML('beforeend', `
+        <div class="chat-bubble ${bubbleClass}" style="opacity: 0.7;">
+            ${msgText}
+            <span class="chat-time"><i class="fas fa-clock"></i> جاري الإرسال...</span>
+        </div>
+    `);
+    container.scrollTop = container.scrollHeight;
+
+    let fd = new FormData();
+    fd.append('client_id', targetClientId);  // ✅ العميل الصحيح
+    fd.append('message', msgText);
+    fd.append('msg_type', msgType);
+
+    try {
+        let res = await safeFetch('/api/chat/send', fd);
+        if (res.status === 'success') {
+            playSound('success');
+            // ✅ تحميل التاريخ للعميل الصحيح
+            if (isAgentReplying && typeof loadChatHistoryForClient === 'function') {
+                loadChatHistoryForClient(targetClientId);
+            } else {
+                loadChatHistory();
+            }
+        } else { 
+            showToast("خطأ في الإرسال", "error"); 
+        }
+    } catch (e) { 
+        showToast("خطأ في الاتصال", "error"); 
+    }
+}
 
     // ================= دالة الرد السريع للوكيل (من الإشعارات) =================
     async function adminQuickReplyToClient(clientId) {
@@ -5168,6 +5209,66 @@ async function orderNetworkCards() {
             showToast("❌ خطأ في الاتصال", "error");
         }
     }
+
+// ================= فتح محادثة كاملة مع عميل محدد =================
+async function openChatWithClient(clientId) {
+    playSound('click');
+    if (!clientId || isNaN(parseInt(clientId))) {
+        return showToast("معرف العميل غير صالح", "error");
+    }
+    let targetId = parseInt(clientId);
+
+    // 1. حفظ clientId الحالي في متغير عالمي
+    window.currentChatClientId = targetId;
+
+    // 2. فتح نافذة المحادثة
+    document.getElementById('chatModal').style.display = 'flex';
+
+    // 3. تغيير العنوان ليعرض اسم العميل
+    let chatHeader = document.querySelector('#chatModal .chat-header h3');
+    let clientName = "العميل #" + targetId;
+    try {
+        let cached = JSON.parse(localStorage.getItem('cached_network_data') || '{"clients":[]}');
+        let client = cached.clients.find(c => c.user_id === targetId);
+        if (client && client.name) clientName = client.name;
+    } catch(e) {}
+    if (chatHeader) chatHeader.innerHTML = `<i class="fas fa-headset"></i> محادثة: ${clientName}`;
+
+    // 4. تحميل سجل الرسائل لهذا العميل
+    await loadChatHistoryForClient(targetId);
+}
+
+// ================= تحميل سجل الرسائل لعميل محدد =================
+async function loadChatHistoryForClient(clientId) {
+    let container = document.getElementById('chatMessages');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center; color:#aaa; margin-top:20px;"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المحادثة...</div>';
+
+    try {
+        let res = await safeGet(`/api/chat/history/${clientId}`);
+        let data = await res.json();
+        if (data.status === 'success') {
+            container.innerHTML = '';
+            if (data.messages.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#aaa; margin-top:20px;">لا توجد رسائل سابقة مع هذا العميل. اكتب رسالتك أدناه 👇</div>';
+            } else {
+                data.messages.forEach(msg => {
+                    let isClient = msg.sender === 'client';
+                    let bubbleClass = isClient ? 'client' : 'admin';
+                    container.insertAdjacentHTML('beforeend', `
+                        <div class="chat-bubble ${bubbleClass}">
+                            ${escapeHTML(msg.text)}
+                            <span class="chat-time">${msg.time}</span>
+                        </div>
+                    `);
+                });
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; color:#ff4757; margin-top:20px;">خطأ في تحميل الرسائل</div>';
+    }
+}
 
     // ================= دالة إحصائيات الوكيل (التحديث الذكي - Smart Polling) =================
     
@@ -15530,8 +15631,6 @@ function performGlobalSearch() {
 <!-- كود ربط الإشعارات الأصلية (Native) لتطبيق الأندرويد -->
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            // 🌟 تم حذف الرادار المزعج نهائياً 🌟
-
             setTimeout(async () => {
                 try {
                     if (window.Capacitor && window.Capacitor.isNativePlatform()) {
@@ -15539,7 +15638,7 @@ function performGlobalSearch() {
                         
                         if (PushNotifications) {
                             await PushNotifications.createChannel({
-                                id: 'alshehab_alerts_v3', // 🌟 تحديث القناة لتتطابق مع السيرفر
+                                id: 'alshehab_alerts_v3',
                                 name: 'إشعارات الشهاب',
                                 description: 'تنبيهات الطلبات الفورية',
                                 importance: 5, 
@@ -15548,7 +15647,6 @@ function performGlobalSearch() {
                             });
 
                             PushNotifications.addListener('registration', async (token) => {
-                                // حفظ التوكن مؤقتاً تحسباً لعدم اكتمال تسجيل الدخول
                                 localStorage.setItem('pending_fcm_token', token.value);
                                 let authToken = localStorage.getItem('auth_token');
                                 if (authToken) {
@@ -15558,7 +15656,7 @@ function performGlobalSearch() {
                                             headers: { 
                                                 'Content-Type': 'application/json',
                                                 'Authorization': 'Bearer ' + authToken,
-                                                'X-Device-ID': getDeviceId() // 🌟 السطر المنقذ
+                                                'X-Device-ID': getDeviceId()
                                             },
                                             body: JSON.stringify({ subscription: token.value })
                                         });
@@ -15570,95 +15668,141 @@ function performGlobalSearch() {
                                 console.log("FCM Error:", error);
                             });
 
-                            // ✅ تم التعديل: إضافة route لكي يكون الإشعار قابلاً للضغط
+                            // ✅ استقبال الإشعار والتطبيق مفتوح
                             PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                                // ✅ استخراج route من data الإشعار
                                 const route = (notification.data && notification.data.route) || 
                                               (notification.notification && notification.notification.data && notification.notification.data.route) || 
                                               null;
                                 const title = notification.title || (notification.notification && notification.notification.title) || 'إشعار جديد';
                                 const body  = notification.body  || (notification.notification && notification.notification.body)  || '';
                                 
-                                // ✅ تمرير route لكي يكون الإشعار قابلاً للضغط
                                 showToast("🔔 " + title + (body ? " - " + body : ""), 'success', route);
                                 
                                 if (typeof softUpdate === "function") softUpdate();
                             });
 
-                            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {                                
-    const data       = notification.notification.data;
-    const actionId   = notification.actionId; 
-    const inputValue = notification.inputValue; 
-    
-    // 🛡️ درع منع التكرار: نحفظ بصمة الحدث لتفادي المعالجة المزدوجة مع appUrlOpen
-    let eventKey = `push_${actionId || 'default'}_${(data && data.client_id) || ''}_${(data && data.order_id) || ''}_${(inputValue || '').substring(0, 20)}`;
-    let lastKey  = sessionStorage.getItem('lastPushActionKey');
-    let lastTime = parseInt(sessionStorage.getItem('lastPushActionTime') || '0');
-    let now      = Date.now();
-    
-    if (lastKey === eventKey && (now - lastTime) < 5000) {
-        console.log('🛡️ تم تجاهل حدث push مكرر:', eventKey);
-        return;
-    }
-    sessionStorage.setItem('lastPushActionKey', eventKey);
-    sessionStorage.setItem('lastPushActionTime', String(now));
-    
-    if (data && data.route) {
-        // ✅ نحفظ pendingDeepLink مع reply_text ليستخدمه appUrlOpen
-        sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
-            route: data.route, 
-            client_id: data.client_id,
-            order_id: data.order_id,
-            actionId: actionId,
-            reply_text: inputValue || null
-        }));
-        
-        // ✅ إذا كان هناك رد/رفض/موافقة، نُرسل API مرة واحدة فقط (dedup يمنع التكرار مع appUrlOpen)
-        if ((actionId === 'reply' && data.client_id && inputValue) || 
-            (actionId === 'reject' && data.order_id) ||
-            (actionId === 'approve' && data.order_id)) {
-            
-            const authToken = localStorage.getItem('auth_token');
-            const deviceId  = typeof getDeviceId === 'function' ? getDeviceId() : (localStorage.getItem('secure_device_id') || '');
-            const serverUrl = (typeof SERVER_URL !== 'undefined' ? SERVER_URL : '');
-            
-            if (actionId === 'reply' && inputValue && authToken) {
-                let fd = new FormData();
-                fd.append('client_id', data.client_id);
-                fd.append('message', inputValue);
-                fd.append('msg_type', 'support');
-                fetch(serverUrl + '/api/chat/send', {
-                    method: 'POST', body: fd,
-                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
-                }).catch(e => console.log("Reply error:", e));
-            }
-            
-            if (actionId === 'reject' && data.order_id && authToken) {
-                let fd = new FormData();
-                fd.append('order_id', data.order_id);
-                fetch(serverUrl + '/api/reject_order', {
-                    method: 'POST', body: fd,
-                    headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
-                }).catch(e => console.log("Reject error:", e));
-            }
-            
-            // ✅ معالجة الموافقة (توجيه لصفحة التسليم)
-            if (actionId === 'approve' && data.order_id) {
-                if (typeof showToast === 'function') 
-                    showToast("✅ تم اعتماد الطلب - يرجى تسليم الكروت", "success");
-                setTimeout(() => {
-                    if (typeof switchScreen === 'function') switchScreen('agent-give-screen');
-                }, 500);
-                return; // لا نستدعي executePendingDeepLink (وجّهنا يدوياً)
-            }
-        }
-        
-        if (typeof window.executePendingDeepLink === 'function') {
-            window.executePendingDeepLink();
-        }
-    }
-});
+                            // ✅ الضغط على الإشعار (التطبيق مغلق أو في الخلفية)
+                            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+                                
+                                // 🔍 1. استخراج البيانات من جميع المصادر المحتملة
+                                const data = (notification.notification && notification.notification.data) || 
+                                             (notification.data) || {};
+                                const actionId   = notification.actionId; 
+                                const inputValue = notification.inputValue; 
+                                
+                                // 📊 سجل للتشخيص (يمكنك رؤيته في Logcat)
+                                console.log('🔔 [Push Action] notification:', JSON.stringify(notification));
+                                console.log('🔔 [Push Action] data:', JSON.stringify(data));
+                                console.log('🔔 [Push Action] actionId:', actionId);
+                                console.log('🔔 [Push Action] inputValue:', inputValue);
+                                
+                                // 🛡️ 2. درع منع التكرار (يمنع التنفيذ المزدوج مع appUrlOpen)
+                                let eventKey = `push_${actionId || 'default'}_${(data && data.client_id) || ''}_${(data && data.order_id) || ''}_${(inputValue || '').substring(0, 20)}`;
+                                let lastKey  = sessionStorage.getItem('lastPushActionKey');
+                                let lastTime = parseInt(sessionStorage.getItem('lastPushActionTime') || '0');
+                                let now      = Date.now();
+                                
+                                if (lastKey === eventKey && (now - lastTime) < 5000) {
+                                    console.log('🛡️ تم تجاهل حدث push مكرر:', eventKey);
+                                    return;
+                                }
+                                sessionStorage.setItem('lastPushActionKey', eventKey);
+                                sessionStorage.setItem('lastPushActionTime', String(now));
+                                
+                                // 🎯 3. استنتاج route تلقائياً إذا لم يصل من السيرفر
+                                let inferredRoute = data.route;
+                                if (!inferredRoute) {
+                                    // استنتاج ذكي بناءً على البيانات المتاحة
+                                    if (data.client_id) inferredRoute = 'chat';
+                                    else if (data.order_id) inferredRoute = 'pending_orders';
+                                    else if (data.trip_id) inferredRoute = 'trips';
+                                    else if (data.notification_id) inferredRoute = 'tickets';
+                                }
+                                
+                                console.log('🔔 [Push Action] inferred route:', inferredRoute);
+                                
+                                if (inferredRoute) {
+                                    // 💾 4. حفظ pendingDeepLink مع timestamp
+                                    sessionStorage.setItem('pendingDeepLink', JSON.stringify({ 
+                                        route: inferredRoute, 
+                                        client_id: data.client_id,
+                                        order_id: data.order_id,
+                                        trip_id: data.trip_id,
+                                        actionId: actionId,
+                                        reply_text: inputValue || null,
+                                        _ts: Date.now()  // ← لمنع تنفيذ روابط قديمة
+                                    }));
+                                    
+                                    // 🎯 5. معالجة الأزرار (reply/reject/approve)
+                                    if ((actionId === 'reply' && data.client_id && inputValue) || 
+                                        (actionId === 'reject' && data.order_id) ||
+                                        (actionId === 'approve' && data.order_id)) {
+                                        
+                                        const authToken = localStorage.getItem('auth_token');
+                                        const deviceId  = typeof getDeviceId === 'function' ? getDeviceId() : (localStorage.getItem('secure_device_id') || '');
+                                        const serverUrl = (typeof SERVER_URL !== 'undefined' ? SERVER_URL : '');
+                                        
+                                        if (actionId === 'reply' && inputValue && authToken) {
+                                            let fd = new FormData();
+                                            fd.append('client_id', data.client_id);
+                                            fd.append('message', inputValue);
+                                            fd.append('msg_type', 'support');
+                                            fetch(serverUrl + '/api/chat/send', {
+                                                method: 'POST', body: fd,
+                                                headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                                            }).catch(e => console.log("Reply error:", e));
+                                        }
+                                        
+                                        if (actionId === 'reject' && data.order_id && authToken) {
+                                            let fd = new FormData();
+                                            fd.append('order_id', data.order_id);
+                                            fetch(serverUrl + '/api/reject_order', {
+                                                method: 'POST', body: fd,
+                                                headers: { 'Authorization': 'Bearer ' + authToken, 'X-Device-ID': deviceId }
+                                            }).catch(e => console.log("Reject error:", e));
+                                        }
+                                        
+                                        if (actionId === 'approve' && data.order_id) {
+                                            if (typeof showToast === 'function') 
+                                                showToast("✅ تم اعتماد الطلب - يرجى تسليم الكروت", "success");
+                                            setTimeout(() => {
+                                                if (typeof switchScreen === 'function') switchScreen('agent-give-screen');
+                                            }, 500);
+                                            return;
+                                        }
+                                    }
+                                    
+                                    // 🚀 6. تنفيذ التنفيذ المباشر + إعادة المحاولة
+                                    if (typeof window.executePendingDeepLink === 'function') {
+                                        // محاولة فورية
+                                        window.executePendingDeepLink();
+                                        
+                                        // إعادة المحاولة 1 (بعد 1.5 ثانية - لفك القفل)
+                                        setTimeout(() => {
+                                            if (sessionStorage.getItem('pendingDeepLink') && 
+                                                typeof window.executePendingDeepLink === 'function') {
+                                                console.log('🔄 إعادة محاولة executePendingDeepLink (1.5s)');
+                                                window.executePendingDeepLink();
+                                            }
+                                        }, 1500);
+                                        
+                                        // إعادة المحاولة 2 (بعد 3.5 ثانية - في حالة التحميل البطيء)
+                                        setTimeout(() => {
+                                            if (sessionStorage.getItem('pendingDeepLink') && 
+                                                typeof window.executePendingDeepLink === 'function') {
+                                                console.log('🔄 إعادة محاولة executePendingDeepLink (3.5s)');
+                                                window.executePendingDeepLink();
+                                            }
+                                        }, 3500);
+                                    }
+                                } else {
+                                    console.log('⚠️ لا توجد بيانات كافية للتوجيه');
+                                    if (typeof showToast === 'function') 
+                                        showToast("تم فتح التطبيق", "success");
+                                }
+                            });
 
+                            // ✅ طلب الصلاحيات وتسجيل الأزرار
                             let permStatus = await PushNotifications.requestPermissions();
                             if (permStatus.receive === 'granted') {
                                 await PushNotifications.register();
@@ -15678,7 +15822,7 @@ function performGlobalSearch() {
                 }
             }, 1500);
         });
- 
+  
         // =====================================================================
 // 🛵 دوال الصلاحيات الجديدة للمندوب
 // =====================================================================
