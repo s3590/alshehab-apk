@@ -1495,6 +1495,10 @@
 
     <!-- ================= إحصائيات الوكيل الشاملة ================= -->
     <div id="agent-dashboard-stats" style="margin-bottom: 10px;">
+<!-- 🌟 أرباح اليوم (العنصر الذي كان مفقوداً) — مخفي افتراضياً ويظهر للوكيل فقط -->
+<div id="daily-cut-wrapper" style="text-align: center; display: none;">
+<div class="agent-cut-badge">💎 أرباح اليوم: <span id="daily-cut">0</span> ريال</div>
+</div>
         
         <!-- القسم الأول: خزينتي -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -1656,6 +1660,7 @@
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d;" onclick="requestReportFile('monthly')"><i class="fas fa-calendar-alt"></i> التقرير الشهري</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px;" onclick="preAuditLedger()"><i class="fas fa-book-open"></i> دفتر المراجعة</button>
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #8e2de2; border-color: #8e2de2;" onclick="viewReportsArchive()"><i class="fas fa-archive"></i> أرشيف التقارير</button>
+        <button class="btn btn-outline vip-glow gold" style="font-size: 12px; padding: 10px; color: gold; border-color: gold; grid-column: span 2;" onclick="openManagerAgentStatement()"><i class="fas fa-file-invoice-dollar"></i> 🧾 كشف حسابي مع المدير (رصيد متحرك)</button>
     </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #ff4757; border-color: #ff4757;" onclick="customPdfReport()"><i class="fas fa-file-pdf"></i> تقرير مخصص</button>
@@ -1881,6 +1886,7 @@
             <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #f5af19; border-color: #f5af19;" onclick="document.querySelectorAll('.screen-section').forEach(el => el.style.display = 'none'); document.getElementById('charts-screen').style.display = 'block'; loadCharts();"><i class="fas fa-chart-bar"></i> الرسوم البيانية</button>
         </div>
         
+        <button class="btn btn-outline" style="width: 100%; font-size: 12px; padding: 10px; margin-bottom: 10px; color: gold; border-color: gold;" onclick="openManagerAgentStatement()"><i class="fas fa-file-invoice-dollar"></i> 🧾 كشف حساب الوكيل (ما له وما عليه)</button>
         <button id="btn-report" class="btn btn-report-locked" style="width: 100%; font-size: 12px; padding: 10px;" onclick="requestReport()"><i class="fas fa-lock"></i> التقرير قيد التجهيز</button>
     </div>
 
@@ -3794,13 +3800,18 @@ async function realBiometric(isAutoPrompt = false) {
     }
 
     // ================= أرباح الوكيل وهز الهاتف =================
-    async function fetchAgentDailyProfit() {
-        if (userId !== ADMIN_ID) return;
-        try {
-            let res = await safeGet('/api/agent_daily_profit'); let data = await res.json();
-            if (data.status === 'success') { document.getElementById('daily-cut').innerText = data.profit; }
-        } catch(e) {}
-    }
+async function fetchAgentDailyProfit() {
+if (userId !== ADMIN_ID) return;
+try {
+let res = await safeGet('/api/agent_daily_profit'); let data = await res.json();
+if (data.status === 'success') {
+let el = document.getElementById('daily-cut');
+let wrap = document.getElementById('daily-cut-wrapper');
+if (el) el.innerText = fmtNum(data.profit);
+if (wrap) wrap.style.display = 'block';
+}
+} catch(e) {}
+}
     
     // جلب البيانات لأول مرة فقط عند فتح التطبيق (بدون تكرار مزعج)
     if (typeof userId !== 'undefined') {
@@ -5271,43 +5282,56 @@ async function loadChatHistoryForClient(clientId) {
 }
 
     // ================= دالة إحصائيات الوكيل (التحديث الذكي - Smart Polling) =================
-    
+
     // دالة مساعدة ذكية: تقرأ الرقم القديم من الشاشة، ولا تحركه إلا إذا تغير فعلياً
     function smartAnimate(elementId, newValue) {
         let el = document.getElementById(elementId);
         if (!el) return;
+
+        // 🌟 احترام قناع الخصوصية: إذا كان الرقم مخفياً، نحدّث القيمة المحفوظة فقط ونبقي القناع كما هو
+        // (يعمل مع المربعات الأمامية .stat-value وأرقام الوجه الخلفي detail-* معاً)
+        if (el.innerText.trim() === '********') {
+            el.setAttribute('data-real-value', fmtNum(newValue) + " ريال");
+            return;
+        }
+
         // استخراج الرقم الحالي من الشاشة (تجاهل كلمة "ريال")
         let oldValue = parseFloat(el.innerText.replace(/[^\d.-]/g, '')) || 0;
         let targetValue = parseFloat(newValue) || 0;
-        
+
         // إذا كان هناك تغيير، حرك الرقم من القيمة القديمة إلى الجديدة
         if (oldValue !== targetValue) {
             animateValue(elementId, oldValue, targetValue, 1000);
         }
     }
 
-        async function loadAgentStats() {
+    async function loadAgentStats() {
         let data = null;
 
         if (navigator.onLine) {
             try {
                 let res = await safeGet('/api/agent_dashboard_stats');
                 data = await res.json();
-                localStorage.setItem('cached_agent_stats', JSON.stringify(data));
+                // 🌟 لا نحفظ في الكاش إلا الردود الناجحة (كي لا يفسد الكاش عند خطأ مؤقت)
+                if (data && data.status === 'success') {
+                    localStorage.setItem('cached_agent_stats', JSON.stringify(data));
+                }
             } catch(e) { console.log("خطأ في جلب إحصائيات الوكيل"); }
         }
-        
+
         if (!data) {
             let cached = localStorage.getItem('cached_agent_stats');
-            if (cached) data = JSON.parse(cached);
+            if (cached) {
+                try { data = JSON.parse(cached); } catch(e) { data = null; }
+            }
         }
 
-        if(data && data.status === 'success') {           
+        if (data && data.status === 'success') {
             let userRole = localStorage.getItem('user_role');
             let perms = {};
             try {
                 let token = localStorage.getItem('auth_token');
-                if(token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
+                if (token) perms = JSON.parse(atob(token.split('.')[1])).perms || {};
             } catch(e) {}
 
             let canViewProfits = (userRole !== 'sub_agent') || (perms.view_profits === true);
@@ -5318,7 +5342,7 @@ async function loadChatHistoryForClient(clientId) {
                 smartAnimate('agent-cards-cash', data.cards_cash);
                 smartAnimate('agent-telecom-cash', data.telecom_cash);
                 smartAnimate('agent-inventory-value', data.agent_inventory_value);
-                if(document.getElementById('detail-mgr-inv')) {
+                if (document.getElementById('detail-mgr-inv')) {
                     smartAnimate('detail-mgr-inv', data.detail_mgr_inv);
                     smartAnimate('detail-agent-inv', data.detail_agent_inv);
                 }
@@ -5333,7 +5357,7 @@ async function loadChatHistoryForClient(clientId) {
             // 🌟 2. ديون السوق والكاش الجاهز (الأمامي والخلفي محمي بالكامل)
             if (canViewDebt) {
                 smartAnimate('agent-market-debt', data.market_debt);
-                if(document.getElementById('detail-mgr-debt')) {
+                if (document.getElementById('detail-mgr-debt')) {
                     smartAnimate('detail-mgr-debt', data.detail_mgr_debt);
                     smartAnimate('detail-agent-debt', data.detail_agent_debt);
                 }
@@ -5363,17 +5387,17 @@ async function loadChatHistoryForClient(clientId) {
                 window.pendingProfitsDetails = []; // إفراغ الأرباح من ذاكرة المتصفح
             }
 
-            // القسم الرابع: الأداء الشهري ومبيعات الفترة وتحليل الكروت المباعة (محمية من المندوب)
+            // 🌟 4. الأداء الشهري وتحليل الكروت المباعة (محمية من المندوب)
             let canViewReports = (userRole !== 'sub_agent') || (perms.reports === true);
             let monthlySection = document.getElementById('agent-monthly-section');
             let catBtn = document.querySelector('button[onclick*="showCategorySalesDetails"]');
-            
+
             if (canViewReports && canViewProfits) {
                 if (monthlySection) monthlySection.style.display = 'block';
                 if (catBtn) catBtn.style.display = 'block';
-                smartAnimate('agent-monthly-clients', data.monthly_clients_sales); 
-                smartAnimate('agent-monthly-walkin', data.monthly_walkin_sales); 
-                window.categorySalesDetails = data.category_sales_list || []; 
+                smartAnimate('agent-monthly-clients', data.monthly_clients_sales);
+                smartAnimate('agent-monthly-walkin', data.monthly_walkin_sales);
+                window.categorySalesDetails = data.category_sales_list || [];
             } else {
                 ['agent-monthly-clients', 'agent-monthly-walkin'].forEach(id => {
                     let el = document.getElementById(id);
@@ -5382,10 +5406,11 @@ async function loadChatHistoryForClient(clientId) {
                 if (monthlySection) monthlySection.style.display = 'none'; // إخفاء القسم بالكامل للمندوب
                 if (catBtn) catBtn.style.display = 'none'; // إخفاء زر الكروت المباعة
                 window.categorySalesDetails = [];
-            } 
+            }
         }
     }
-
+    
+    
 // 🌟 حماية تفاصيل الكاش الجاهز بالبقالات عند النقر
     function showReadyCashDetails() {
         let userRole = localStorage.getItem('user_role');
@@ -5507,11 +5532,11 @@ async function loadChatHistoryForClient(clientId) {
         // المربعات الآن ثابتة، فخمة، ومستقرة 100% ولا تسبب أي أخطاء في الشاشة.
     }
 
-    // ================= دوال المدير العام =================
+        // ================= دوال المدير العام =================
     async function showManagerScreen() {
         document.querySelectorAll('.screen-section').forEach(el => el.style.display = 'none');
         document.getElementById('manager-screen').style.display = 'block';
-        
+
         let data = null;
 
         // 1. محاولة جلب البيانات أونلاين وحفظها
@@ -5519,7 +5544,10 @@ async function loadChatHistoryForClient(clientId) {
             try {
                 let response = await safeGet('/api/manager_data');
                 data = await response.json();
-                localStorage.setItem('cached_manager_data', JSON.stringify(data));
+                // 🌟 لا نحفظ في الكاش إلا الردود الناجحة (كي لا يفسد الكاش عند خطأ مؤقت)
+                if (data && data.status === 'success') {
+                    localStorage.setItem('cached_manager_data', JSON.stringify(data));
+                }
             } catch (e) { console.log("خطأ في جلب بيانات المدير"); }
         }
 
@@ -5527,69 +5555,72 @@ async function loadChatHistoryForClient(clientId) {
         if (!data) {
             let cached = localStorage.getItem('cached_manager_data');
             if (cached) {
-                data = JSON.parse(cached);
+                try { data = JSON.parse(cached); } catch (e) { data = null; }
+            }
+            if (data) {
                 showToast("أنت في وضع الأوفلاين (بيانات محفوظة)", "warning");
             } else {
                 return showToast("لا يوجد إنترنت ولم يتم حفظ بيانات المدير مسبقاً.", "error");
             }
         }
-        
-        if(data && data.status === 'success') {
-            // ربط المربعات الستة الجديدة
-            animateValue('mgr-total-capital', 0, data.total_capital, 1500);
-            animateValue('mgr-market-debt', 0, data.market_debt, 1500);
-            animateValue('mgr-agent-cash', 0, data.agent_cash, 1500);
-            animateValue('mgr-agent-inv', 0, data.agent_inventory, 1500);
-            animateValue('mgr-monthly-paid', 0, data.monthly_paid, 1500);
-            animateValue('mgr-monthly-expenses', 0, data.monthly_expenses, 1500);
-            
+
+        if (data && data.status === 'success') {
+            // 🌟 ربط المربعات الستة (تتحرك من قيمتها الحالية، لا تنهار للصفر)
+            smartAnimate('mgr-total-capital', data.total_capital);
+            smartAnimate('mgr-market-debt', data.market_debt);
+            smartAnimate('mgr-agent-cash', data.agent_cash);
+            smartAnimate('mgr-agent-inv', data.agent_inventory);
+            smartAnimate('mgr-monthly-paid', data.monthly_paid);
+            smartAnimate('mgr-monthly-expenses', data.monthly_expenses);
+
+            // 🌟 زر التقرير (مع حماية لو العنصر غير موجود)
             let btnReport = document.getElementById('btn-report');
-        
-            if(data.is_report_ready) {
-                btnReport.className = "btn btn-report-ready";
-                btnReport.innerHTML = '<i class="fas fa-check-circle"></i> التقرير الشهري معتمد وجاهز';
-                btnReport.onclick = function() { 
-                    smartDialog({
-                        type: 'alert', title: '📊 التقرير جاهز!',
-                        message: 'يا شيخ رهيب، التقرير الشهري معتمد وجاهز للتحميل. يرجى التوجه إلى <b>بوت التليجرام</b> والضغط على زر <b>(سحب التقرير الشهري)</b> لتحميل ملف الإكسل.',
-                        icon: 'fa-check-circle', color: '#38ef7d'
-                    });
-                };
-            } else {
-                btnReport.className = "btn btn-report-locked";
-                btnReport.innerHTML = '<i class="fas fa-lock"></i> التقرير قيد التجهيز والمراجعة';
-                btnReport.onclick = function() {
-                    smartDialog({
-                        type: 'alert', title: '⏳ التقرير غير جاهز', 
-                        message: 'يا شيخ رهيب، التقرير المالي لهذا الشهر لا يزال قيد التجهيز والمراجعة من قبل الوكيل. سيتحول هذا الزر للون <b>الأخضر</b> فور اعتماده.', 
-                        icon: 'fa-clock', color: '#f5af19'
-                    });
-                };
+            if (btnReport) {
+                if (data.is_report_ready) {
+                    btnReport.className = "btn btn-report-ready";
+                    btnReport.innerHTML = '<i class="fas fa-check-circle"></i> التقرير الشهري معتمد وجاهز';
+                    btnReport.onclick = function() {
+                        smartDialog({
+                            type: 'alert', title: '📊 التقرير جاهز!',
+                            message: 'يا شيخ رهيب، التقرير الشهري معتمد وجاهز للتحميل. يرجى التوجه إلى <b>بوت التليجرام</b> والضغط على زر <b>(سحب التقرير الشهري)</b> لتحميل ملف الإكسل.',
+                            icon: 'fa-check-circle', color: '#38ef7d'
+                        });
+                    };
+                } else {
+                    btnReport.className = "btn btn-report-locked";
+                    btnReport.innerHTML = '<i class="fas fa-lock"></i> التقرير قيد التجهيز والمراجعة';
+                    btnReport.onclick = function() {
+                        smartDialog({
+                            type: 'alert', title: '⏳ التقرير غير جاهز',
+                            message: 'يا شيخ رهيب، التقرير المالي لهذا الشهر لا يزال قيد التجهيز والمراجعة من قبل الوكيل. سيتحول هذا الزر للون <b>الأخضر</b> فور اعتماده.',
+                            icon: 'fa-clock', color: '#f5af19'
+                        });
+                    };
+                }
             }
 
-                        // 🌟 تم إزالة عرض الديون والمخزون المباشر من هنا (أصبحت تظهر عبر الأزرار الذكية)
-
-            // ?? الإبقاء فقط على كروت الإرسالية (مهم جداً لكي يستطيع المدير إرسال كروت للوكيل)
+            // 🌟 تم إزالة عرض الديون والمخزون المباشر من هنا (أصبحت تظهر عبر الأزرار الذكية)
+            // 📦 الإبقاء فقط على كروت الإرسالية (مهم جداً لكي يستطيع المدير إرسال كروت للوكيل)
+            let invList = data.inventory_list || [];
             let mgrCardsHtml = "";
-            if(data.inventory_list.length > 0) {
-                data.inventory_list.forEach(item => {
+            if (invList.length > 0) {
+                invList.forEach(item => {
                     mgrCardsHtml += generateCardHTML(item, `selectManagerCard(this, '${item.card_type}')`);
                 });
             } else {
                 mgrCardsHtml = "<div style='color:#aaa; padding:10px; text-align:center; width:100%;'>المخزون فارغ حالياً</div>";
             }
-            
-            let mgrScroll = document.getElementById('manager-inv-scroll');
-            if(mgrScroll) mgrScroll.innerHTML = mgrCardsHtml;
 
+            let mgrScroll = document.getElementById('manager-inv-scroll');
+            if (mgrScroll) mgrScroll.innerHTML = mgrCardsHtml;
         }
-        
+
         // 🚀 تشغيل التوجيه الذكي للمدير العام فور اكتمال تحميل شاشته
         if (typeof window.executePendingDeepLink === 'function') {
             setTimeout(() => window.executePendingDeepLink(), 300);
         }
     }
-
+    
     // 🌟 دالة عرض ديون السوق للمدير (في نافذة فخمة)
     async function managerViewMarketDebt() {
         playSound('click');
@@ -15016,9 +15047,13 @@ async function openGlobalSearch() {
         </div>`;
     
     // تحميل البيانات مرة واحدة فقط عند فتح النافذة (من localForage السريع)
-    let cached = await localforage.getItem('cached_network_data');
-    globalSearchCache = cached || {clients: [], inventory: []};
-
+    
+    let cached = null;
+try { cached = JSON.parse(localStorage.getItem('cached_network_data') || 'null'); } catch(e) {}
+if (!cached) cached = await localforage.getItem('cached_network_data');
+globalSearchCache = cached || {clients: [], inventory: []};
+if (!globalSearchCache.clients) globalSearchCache.clients = [];
+if (!globalSearchCache.inventory) globalSearchCache.inventory = [];
     setTimeout(() => document.getElementById('globalSearchInput').focus(), 100);
 }
 
@@ -15285,38 +15320,49 @@ function performGlobalSearch() {
         }
     });
 
-    // ================= ميزة إخفاء الأرصدة الشاملة (Privacy Mode) =================
+        // ================= ميزة إخفاء الأرصدة الشاملة (Privacy Mode) =================
     let balancesHidden = false;
+
+    // 🌟 أرقام الوجه الخلفي (تفاصيل المدير والوكيل) تُخفى مع الأرصدة أيضاً
+    const PRIVACY_EXTRA_IDS = ['detail-mgr-inv', 'detail-agent-inv', 'detail-mgr-debt', 'detail-agent-debt'];
+
     function toggleAllBalances() {
         balancesHidden = !balancesHidden;
         playSound('click');
-        if(tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
-        
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+
         let icon = document.getElementById('global-eye-icon');
-        if(icon) {
+        if (icon) {
             icon.className = balancesHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
             icon.style.color = balancesHidden ? '#ff4757' : '#38ef7d';
         }
-        
-        // البحث عن كل الأرقام في الشاشة وإخفائها أو إظهارها
-        document.querySelectorAll('.stat-value').forEach(el => {
+
+        // جمع كل الأرقام الظاهرة + أرقام الوجه الخلفي
+        let targets = Array.from(document.querySelectorAll('.stat-value'));
+        PRIVACY_EXTRA_IDS.forEach(id => {
+            let el = document.getElementById(id);
+            if (el && targets.indexOf(el) === -1) targets.push(el);
+        });
+
+        targets.forEach(el => {
             if (balancesHidden) {
-                // حفظ الرقم الحقيقي في الذاكرة المؤقتة للعنصر قبل إخفائه
-                if (!el.getAttribute('data-real-value')) {
+                // 🌟 نحفظ الرقم الحقيقي في كل مرة (وليس أول مرة فقط) لكي لا يرجع رقم قديم عند الإظهار
+                if (el.innerText.trim() !== '********') {
                     el.setAttribute('data-real-value', el.innerText);
                 }
                 el.innerText = '********';
                 el.classList.remove('pop-anim'); // إيقاف النبض أثناء الإخفاء
             } else {
-                // استرجاع الرقم الحقيقي
+                // استرجاع الرقم الحقيقي (المحدّث) ثم تنظيف الذاكرة المؤقتة للعنصر
                 let realVal = el.getAttribute('data-real-value');
                 if (realVal) el.innerText = realVal;
+                el.removeAttribute('data-real-value');
             }
         });
-        
+
         showToast(balancesHidden ? "تم إخفاء الأرصدة لحماية خصوصيتك 🔒" : "تم إظهار الأرصدة 👁️", balancesHidden ? "warning" : "success");
     }
-
+    
     // ================= دوال القائمة الجانبية (Sidebar) =================
     function toggleSidebar() {
         playSound('click');
@@ -15446,7 +15492,95 @@ function performGlobalSearch() {
         localStorage.setItem('last_online_timestamp', Date.now());
     });
 
-    // ================= دالة مؤشر صحة الديون (للمدير العام) =================
+    // ================= 🧾 كشف حساب الوكيل ↔ المدير =================
+async function openManagerAgentStatement() {
+    playSound('click');
+    let choice = await smartSelect("فترة كشف الحساب", [
+        { value: 'all', text: '📚 منذ البداية (كشف كامل)', icon: 'fa-book', color: 'gold' },
+        { value: 'month', text: '📅 هذا الشهر', icon: 'fa-calendar', color: '#00d2ff' },
+        { value: 'prev', text: '🗓️ الشهر الماضي', icon: 'fa-calendar-check', color: '#38ef7d' },
+        { value: 'custom', text: '✏️ فترة مخصصة', icon: 'fa-edit', color: '#f5af19' }
+    ]);
+    if (!choice) return;
+
+    let fd = new FormData();
+    let now = new Date();
+    let pad = n => String(n).padStart(2, '0');
+    let fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    if (choice === 'month') {
+        fd.append('start_date', fmt(new Date(now.getFullYear(), now.getMonth(), 1)));
+        fd.append('end_date', fmt(now));
+    } else if (choice === 'prev') {
+        fd.append('start_date', fmt(new Date(now.getFullYear(), now.getMonth()-1, 1)));
+        fd.append('end_date', fmt(new Date(now.getFullYear(), now.getMonth(), 0)));
+    } else if (choice === 'custom') {
+        let s = await smartDialog({ type:'prompt', title:'من تاريخ', message:'تاريخ البداية:', inputType:'date', color:'#00d2ff' });
+        if (!s) return;
+        let e = await smartDialog({ type:'prompt', title:'إلى تاريخ', message:'تاريخ النهاية:', inputType:'date', color:'#f5af19' });
+        if (!e) return;
+        fd.append('start_date', s); fd.append('end_date', e);
+    }
+
+    showToast("⏳ جاري إعداد كشف الحساب...", "warning");
+    let res = await safeFetch('/api/manager_agent_statement', fd);
+    if (!res || res.status !== 'success') return showToast((res && res.message) || "خطأ", "error");
+    window._lastStatementRange = { start: res.start_date, end: res.end_date };
+
+    let b = res.breakdown || {};
+    let rowsHtml = '';
+    for (let k in b) {
+        if (b[k] === 0) continue;
+        rowsHtml += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <span style="color:#ccc;">${k}</span><b style="color:#fff;">${fmtNum(b[k])}</b></div>`;
+    }
+
+    let matchHtml = '';
+    if (res.difference !== null) {
+        let ok = Math.abs(res.difference) < 1;
+        matchHtml = `<div style="text-align:center; margin-top:8px; padding:6px; border-radius:8px; background:${ok?'rgba(56,239,125,0.1)':'rgba(255,71,87,0.1)'}; border:1px solid ${ok?'#38ef7d':'#ff4757'}; color:${ok?'#38ef7d':'#ff4757'}; font-weight:bold;">
+            ${ok ? '✅ الميزان متطابق تماماً' : '⚠️ فرق: ' + fmtNum(res.difference) + ' ريال'}</div>`;
+    }
+
+    let agentHtml = '';
+    if (res.agent_pending_profit !== null && res.agent_pending_profit !== undefined) {
+        agentHtml = `<div style="margin-top:10px; padding:8px; border-radius:8px; background:rgba(142,45,226,0.1); border:1px dashed #8e2de2;">
+            <div style="color:#8e2de2; font-weight:bold; margin-bottom:4px;">🔒 خاص بك</div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#ccc;">أرباحك المعلقة:</span><b>${fmtNum(res.agent_pending_profit)}</b></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#ccc;">أرباحك المحصلة:</span><b>${fmtNum(res.agent_realized_profit)}</b></div>
+        </div>`;
+    }
+
+    let html = `<div style="text-align:right; max-height:440px; overflow-y:auto; font-size:12px; line-height:1.7;">
+        <div style="text-align:center; color:#aaa; margin-bottom:10px;">الفترة: ${res.start_date} ← ${res.end_date} | ${res.movements_count} حركة</div>
+        <div style="display:flex; justify-content:space-between; padding:8px; background:rgba(255,255,255,0.05); border-radius:8px;">
+            <span style="color:#aaa;">الرصيد الافتتاحي:</span><b style="color:#fff;">${fmtNum(res.opening_balance)} ريال</b></div>
+        <div style="margin:10px 0;">${rowsHtml || '<div style="color:#888;text-align:center;">لا توجد حركات في هذه الفترة</div>'}</div>
+        <div style="display:flex; justify-content:space-between; padding:6px;"><span style="color:#38ef7d;">إجمالي ما لك (دائن):</span><b style="color:#38ef7d;">${fmtNum(res.total_credit)}</b></div>
+        <div style="display:flex; justify-content:space-between; padding:6px;"><span style="color:#ff4757;">إجمالي ما عليك (مدين):</span><b style="color:#ff4757;">${fmtNum(res.total_debit)}</b></div>
+        <div style="display:flex; justify-content:space-between; padding:10px; margin-top:6px; background:rgba(255,215,0,0.1); border:1px solid gold; border-radius:10px;">
+            <span style="color:gold; font-weight:bold;">الرصيد الختامي للمدير:</span><b style="color:gold; font-size:16px;">${fmtNum(res.closing_balance)} ريال</b></div>
+        <div style="margin-top:10px; color:#00d2ff; font-weight:bold;">📊 أين يوجد هذا المبلغ الآن؟</div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:#ccc;">📦 مخزون (تكلفة):</span><b>${fmtNum(res.inventory_value)}</b></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:#ccc;">👥 ديون السوق (صافي):</span><b>${fmtNum(res.net_market_debt)}</b></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:#ccc;">💵 كاش صافي بالدرج:</span><b>${fmtNum(res.net_cash)}</b></div>
+        ${matchHtml}${agentHtml}
+        <button class="btn btn-retail" style="width:100%; margin-top:14px;" onclick="sendStatementToTelegram()"><i class="fab fa-telegram-plane"></i> إرسال الكشف الكامل (Excel) لتليجرام</button>
+    </div>`;
+
+    smartDialog({ type:'alert', title:'🧾 كشف حساب الوكيل والمدير', message:html, icon:'fa-file-invoice-dollar', color:'gold' });
+}
+
+async function sendStatementToTelegram() {
+    let r = window._lastStatementRange || {};
+    let fd = new FormData();
+    if (r.start) fd.append('start_date', r.start);
+    if (r.end) fd.append('end_date', r.end);
+    fd.append('send_telegram', 'true');
+    await executeApiAction('/api/manager_agent_statement', fd, "⏳ جاري إرسال الملف...");
+}
+
+// ================= دالة مؤشر صحة الديون (للمدير العام) =================
         // 🌟 دالة تحليل ديون العميل (عمر الدين) + زر التجميد للمدير
     async function showDebtHealth(clientId, clientName) {
         showToast("⏳ جاري تحليل حساب العميل...", "warning");
