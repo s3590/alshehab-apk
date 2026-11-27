@@ -1691,6 +1691,10 @@
             <i class="fas fa-user-tie"></i> إدارة المناديب (الوكلاء الفرعيين) 🛵
         </button>
 
+        <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d; grid-column: span 2;" onclick="openActivationCenter()">
+            <i class="fas fa-key"></i> 🔑 مركز أكواد التفعيل (بديل الواتساب)
+        </button>
+
         <!-- 🚀 الزر الجديد للوحة الصلاحيات -->
         <button class="btn btn-outline" style="font-size: 12px; padding: 10px; color: #38ef7d; border-color: #38ef7d; grid-column: span 2;" onclick="openPermissionsCenter()">
             <i class="fas fa-user-shield"></i> لوحة تحكم صلاحيات البقالات 🚦
@@ -8673,25 +8677,170 @@ function renderSubAgentsListDialog() {
 
         // ================= دالة التفعيل واستعادة كلمة المرور عبر الواتساب =================
     async function activateOrRecoverAccount() {
-        let accountId = await smartDialog({
-            type: 'prompt', title: 'تفعيل / استعادة', message: 'أدخل رقم الحساب (الآيدي) الخاص بك:',
-            icon: 'fa-unlock-alt', color: '#38ef7d', inputType: 'number', placeholder: 'رقم الحساب...'
-        });
-        if (!accountId) return;
+    let choice = await smartSelect("تفعيل الحساب / استعادة الرمز", [
+        { value: 'code',    text: '🔑 عندي كود تفعيل من الوكيل',      icon: 'fa-key',         color: '#38ef7d' },
+        { value: 'request', text: '📨 طلب كود تفعيل جديد',            icon: 'fa-paper-plane', color: '#00d2ff' },
+        { value: 'wa',      text: '💬 عبر الواتساب (الطريقة القديمة)', icon: 'fa-whatsapp',    color: '#25D366' }
+    ]);
+    if (!choice) return;
+    if (choice === 'code')    return activateWithAgentCode();
+    if (choice === 'request') return requestAgentCode();
+    return activateViaWhatsApp();
+}
 
-        // الرسالة الجاهزة التي سيفهمها السيرفر
-        let msg = `مرحباً إدارة الشهاب pro🌐\nأرجو تفعيل حسابي / إرسال كلمة المرور.\n\n🆔 رقم: ${accountId}`;
-        let encodedMsg = encodeURIComponent(msg);
-        let systemNumber = "+966565899776"; // ⚠️ تأكد من وضع رقم الإدارة الصحيح هنا
-        
-        smartDialog({
-            type: 'alert', title: 'خطوة أخيرة 📩',
-            message: 'سيتم فتح الواتساب الآن. قم بإرسال الرسالة الجاهزة، وسيقوم النظام بالرد عليك فوراً بكلمة المرور.',
-            icon: 'fa-whatsapp', color: '#25D366'
-        }).then(() => {
-            window.open(`https://wa.me/${systemNumber}?text=${encodedMsg}`, '_blank' );
+async function requestAgentCode() {
+    let accountId = await smartDialog({type:'prompt', title:'طلب كود تفعيل', message:'أدخل رقم الحساب (الآيدي) الخاص بك:', icon:'fa-id-card', color:'#00d2ff', inputType:'number'});
+    if (!accountId) return;
+    if (!navigator.onLine) return showToast("📡 يتطلب الاتصال بالإنترنت.", "error");
+    showToast("⏳ جاري إرسال الطلب للوكيل...", "warning");
+    try {
+        let fd = new FormData(); fd.append('user_id', parseInt(accountId));
+        let res = await fetch(SERVER_URL + '/api/activation_request', { method:'POST', body: fd });
+        let data = await res.json();
+        if (data.status === 'success') {
+            playSound('success');
+            smartDialog({type:'alert', title:'تم إرسال الطلب ✅',
+                message: data.message + '<br><br><small style="color:#f5af19;">اتصل بالوكيل ليقرأ لك الكود، ثم اختر (عندي كود تفعيل).</small>',
+                icon:'animated-check', color:'#38ef7d'});
+        } else { showToast(data.message, "error"); }
+    } catch(e) { showToast("خطأ في الاتصال", "error"); }
+}
+
+async function activateWithAgentCode() {
+    let accountId = await smartDialog({type:'prompt', title:'رقم الحساب', message:'أدخل رقم الحساب (الآيدي):', icon:'fa-id-card', color:'#00d2ff', inputType:'number'});
+    if (!accountId) return;
+    let code = await smartDialog({type:'prompt', title:'كود التفعيل', message:'أدخل الكود المكوّن من 6 أرقام الذي أعطاك الوكيل:', icon:'fa-key', color:'#38ef7d', inputType:'number'});
+    if (!code) return;
+    if (!navigator.onLine) return showToast("📡 يتطلب الاتصال بالإنترنت.", "error");
+    let parsedId = parseInt(accountId);
+    showToast("⏳ جاري التفعيل وربط الجهاز...", "warning");
+    try {
+        let fd = new FormData();
+        fd.append('user_id', parsedId);
+        fd.append('code', String(code).trim());
+        fd.append('device_id', getDeviceId());
+        let res = await fetch(SERVER_URL + '/api/activate_with_code', { method:'POST', body: fd });
+        let data = await res.json();
+        if (data.status !== 'success') { playSound('error'); return showToast(data.message, "error"); }
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('saved_user_id', parsedId);
+        localStorage.setItem('user_role', 'client');
+        localStorage.removeItem('cashier_name');
+        localStorage.removeItem('cashier_perms');
+        userId = parsedId;
+        try {
+            let r = await safeGet(`/api/user_data/${parsedId}`);
+            if (r && r.ok) {
+                let d = await r.json();
+                if (d && d.status === 'success') {
+                    localStorage.setItem(`cached_user_data_${parsedId}`, JSON.stringify(d));
+                    if (typeof localforage !== 'undefined') await localforage.setItem(`cached_user_data_${parsedId}`, d);
+                }
+            }
+        } catch(e) {}
+        let pendingToken = localStorage.getItem('pending_fcm_token');
+        if (pendingToken) {
+            fetch(SERVER_URL + '/api/save_subscription', {
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.token,'X-Device-ID':getDeviceId()},
+                body: JSON.stringify({subscription: pendingToken})
+            }).catch(()=>{});
+        }
+        playSound('success');
+        smartDialog({type:'alert', title:'تم التفعيل 🎉',
+            message:'تم ربط حسابك بهذا الهاتف بنجاح.<br><small style="color:#f5af19;">يمكنك تغيير رمزك لاحقاً من (حسابي ← تغيير الرمز السري).</small>',
+            icon:'animated-check', color:'#38ef7d'});
+        setTimeout(() => { window.location.href = window.location.pathname; }, 1800);
+    } catch(e) { showToast("خطأ في الاتصال", "error"); }
+}
+
+// 💬 الطريقة القديمة — كما هي حرفياً بدون أي تغيير
+async function activateViaWhatsApp() {
+    let accountId = await smartDialog({
+        type: 'prompt', title: 'تفعيل / استعادة', message: 'أدخل رقم الحساب (الآيدي) الخاص بك:',
+        icon: 'fa-unlock-alt', color: '#38ef7d', inputType: 'number', placeholder: 'رقم الحساب...'
+    });
+    if (!accountId) return;
+    let msg = `مرحباً إدارة الشهاب pro🌐
+أرجو تفعيل حسابي / إرسال كلمة المرور.
+🆔 رقم: ${accountId}`;
+    let encodedMsg = encodeURIComponent(msg);
+    let systemNumber = "+966565899776";
+    smartDialog({
+        type: 'alert', title: 'خطوة أخيرة 📩',
+        message: 'سيتم فتح الواتساب الآن. قم بإرسال الرسالة الجاهزة، وسيقوم النظام بالرد عليك فوراً بكلمة المرور.',
+        icon: 'fa-whatsapp', color: '#25D366'
+    }).then(() => {
+        window.open(`https://wa.me/${systemNumber}?text=${encodedMsg}`, '_blank');
+    });
+}
+
+// ================= 🔑 مركز أكواد التفعيل (للوكيل) =================
+async function openActivationCenter() {
+    playSound('click');
+    showToast("⏳ جاري جلب طلبات التفعيل...", "warning");
+    let fd = new FormData(); fd.append('action', 'list');
+    let data = await safeFetch('/api/activation_manage', fd);
+    if (!data || data.status !== 'success') return showToast((data && data.message) || "خطأ", "error");
+    let html = `<div style="max-height:340px; overflow-y:auto; text-align:right;">`;
+    if (data.requests.length === 0) {
+        html += `<div style="text-align:center; color:#aaa; padding:20px;">لا توجد طلبات تفعيل معلقة.</div>`;
+    } else {
+        data.requests.forEach(r => {
+            html += `<div style="background:rgba(15,23,42,0.9); border:1px solid #38ef7d; border-radius:10px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong style="color:#00d2ff; font-size:14px;">🏪 ${escapeHTML(r.name)}</strong>
+                    <div style="color:#aaa; font-size:11px; margin-top:3px;">🆔 ${r.client_id} • 🕒 ${r.date}</div>
+                </div>
+                <button class="btn-small" style="background:#38ef7d; color:#000; font-weight:bold; padding:8px 12px;" onclick="issueActivationCode(${r.client_id})">إصدار كود</button>
+            </div>`;
         });
     }
+    html += `</div>
+    <button class="btn btn-retail" style="width:100%; margin-top:12px;" onclick="issueActivationCodeForAny()">
+        <i class="fas fa-key"></i> إصدار كود لأي بقالة (بدون طلب)
+    </button>`;
+    smartDialog({type:'alert', title:'🔑 مركز أكواد التفعيل', message:html, icon:'fa-key', color:'#38ef7d'});
+}
+
+async function issueActivationCodeForAny() {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    showToast("⏳ جاري جلب البقالات...", "warning");
+    let res = await safeGet('/api/network_data');
+    let data = await res.json();
+    if (data.status !== 'success') return showToast("خطأ في جلب البقالات", "error");
+    let list = data.clients.map(c => ({ value: c.user_id, text: `🏪 ${c.name}`, icon: 'fa-store', color: '#00d2ff' }));
+    let clientId = await smartSelect("اختر البقالة", list);
+    if (!clientId) return;
+    issueActivationCode(clientId);
+}
+
+async function issueActivationCode(clientId) {
+    document.getElementById('smart-dialog-overlay').style.display = 'none';
+    showToast("⏳ جاري إصدار الكود...", "warning");
+    let fd = new FormData();
+    fd.append('action', 'issue');
+    fd.append('client_id', clientId);
+    let data = await safeFetch('/api/activation_manage', fd);
+    if (!data || data.status !== 'success') return showToast((data && data.message) || "خطأ", "error");
+    playSound('success');
+    smartDialog({
+        type: 'alert',
+        title: `🔑 كود تفعيل: ${escapeHTML(data.client_name)}`,
+        message: `<div style="background:#000; padding:18px; border-radius:12px; border:1px dashed #38ef7d; text-align:center; margin-bottom:12px;">
+                    <h1 style="color:#38ef7d; letter-spacing:8px; font-family:monospace; margin:0;">${data.code}</h1>
+                  </div>
+                  <div style="color:#f5af19; font-size:12px; text-align:center; line-height:1.7;">
+                    ⏳ صالح <b>15 دقيقة</b> • يُستخدم <b>مرة واحدة</b><br>
+                    اقرأه للبقالة هاتفياً، ثم تختار:<br>
+                    <b>تفعيل حسابي ← عندي كود تفعيل</b>
+                  </div>
+                  <button class="btn btn-outline" style="width:100%; margin-top:12px; color:#38ef7d; border-color:#38ef7d;" onclick="navigator.clipboard.writeText('${data.code}'); showToast('تم نسخ الكود!', 'success');">
+                    <i class="fas fa-copy"></i> نسخ الكود
+                  </button>`,
+        icon: 'fa-key', color: '#38ef7d'
+    });
+}
 
     // ================= دالة تغيير كلمة المرور من داخل التطبيق (للعميل) =================
     async function changeMyPassword() {
